@@ -983,9 +983,14 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
     }
     const user = db.prepare("SELECT id, email, full_name FROM users WHERE id = ?").get(req.session.user.id);
     const planCode = String(req.body.plan_code || "").trim().toUpperCase();
-    const plan = db
-      .prepare("SELECT * FROM plans WHERE code = ? AND is_active = 1 LIMIT 1")
-      .get(planCode);
+    const planId = Number(req.body.plan_id || 0);
+    let plan = null;
+    if (planCode) {
+      plan = db.prepare("SELECT * FROM plans WHERE code = ? AND is_active = 1 LIMIT 1").get(planCode);
+    }
+    if (!plan && planId) {
+      plan = db.prepare("SELECT * FROM plans WHERE id = ? AND is_active = 1 LIMIT 1").get(planId);
+    }
     if (!plan) return res.status(400).json({ ok: false, message: "Plan invalido." });
     if (!MP_ACCESS_TOKEN) return res.status(503).json({ ok: false, message: "Pasarela no configurada." });
 

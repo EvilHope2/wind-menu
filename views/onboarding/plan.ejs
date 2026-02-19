@@ -23,6 +23,7 @@
             type="button"
             class="btn btn-primary js-plan-btn"
             data-plan-code="<%= String(plan.code || '').toUpperCase() %>"
+            data-plan-id="<%= plan.id %>"
             <%= mercadopagoReady ? '' : 'disabled' %>>
             Elegir <%= plan.display_name || plan.name %>
           </button>
@@ -43,12 +44,16 @@
 <script>
   const planButtons = document.querySelectorAll(".js-plan-btn");
   const planError = document.getElementById("plan-error");
-  async function selectPlan(code) {
+  async function selectPlan(code, planId) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch("/api/onboarding/select-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan_code: code })
+      body: JSON.stringify({ plan_code: code, plan_id: planId }),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
     const data = await response.json().catch(() => ({}));
     if (data.redirect_to) {
       window.location.href = data.redirect_to;
@@ -65,12 +70,18 @@
 
   for (const button of planButtons) {
     button.addEventListener("click", async () => {
+      const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "Preparando checkout...";
       try {
-        await selectPlan(button.dataset.planCode);
+        await selectPlan(button.dataset.planCode, button.dataset.planId);
+      } catch (_error) {
+        if (planError) {
+          planError.textContent = "No pudimos iniciar el checkout. Reintenta en unos segundos.";
+        }
       } finally {
         button.disabled = false;
+        button.textContent = originalText;
       }
     });
   }
