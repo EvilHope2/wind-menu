@@ -914,6 +914,7 @@ app.get("/support", (_req, res) => {
 
 app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return flashAndRedirect(req, res, "error", "Completa el registro del comercio.", "/register");
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
   res.render("onboarding/welcome", {
@@ -924,16 +925,12 @@ app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
 
 app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return flashAndRedirect(req, res, "error", "Completa el registro del comercio.", "/register");
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
 
   const plans = db
-    .prepare(
-      `SELECT id, code, display_name, price_ars, currency, max_products
-       FROM plans
-       WHERE is_active = 1
-       ORDER BY price_ars ASC, id ASC`
-    )
+    .prepare("SELECT * FROM plans WHERE is_active = 1 ORDER BY COALESCE(price_ars, price) ASC, id ASC")
     .all();
 
   res.render("onboarding/plan", {
@@ -946,6 +943,7 @@ app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
 
 app.get("/onboarding/checkout", requireRole("COMMERCE"), (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return flashAndRedirect(req, res, "error", "Completa el registro del comercio.", "/register");
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
 
@@ -978,6 +976,7 @@ app.get("/onboarding/checkout", requireRole("COMMERCE"), (req, res) => {
 app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res) => {
   try {
     const business = getBusinessByUserId(req.session.user.id);
+    if (!business) return res.status(400).json({ ok: false, message: "Comercio no encontrado." });
     const gate = resolveCommerceGate(business.id);
     if (gate.allowed) {
       return res.json({ ok: true, already_active: true, redirect_to: "/app" });
@@ -1052,6 +1051,7 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
 
 app.get("/api/subscription/status", requireRole("COMMERCE"), (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return res.status(400).json({ ok: false, message: "Comercio no encontrado." });
   const active = activeSubscriptionForBusiness(business.id);
   const pending = pendingSubscriptionForBusiness(business.id);
   const subscriptionId = Number(req.query.sub || pending?.id || active?.id || 0);
@@ -1240,13 +1240,9 @@ app.get("/app", requireAuth, (req, res) => {
 
 app.get(["/app/plans", "/billing"], requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return flashAndRedirect(req, res, "error", "Comercio no encontrado.", "/register");
   const plans = db
-    .prepare(
-      `SELECT id, code, display_name, name, price_ars, price, max_products, currency, is_active
-       FROM plans
-       WHERE is_active = 1
-       ORDER BY price_ars ASC, id ASC`
-    )
+    .prepare("SELECT * FROM plans WHERE is_active = 1 ORDER BY COALESCE(price_ars, price) ASC, id ASC")
     .all();
 
   const subscriptions = db
