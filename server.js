@@ -432,7 +432,13 @@ function canCreateProductForBusiness(businessId) {
 function ensureActiveSubscriptionAccess(req, res, next) {
   if (!req.session?.user || req.session.user.role !== "COMMERCE") return next();
   const business = getBusinessByUserId(req.session.user.id);
-  if (!business) return flashAndRedirect(req, res, "error", "Comercio no encontrado.", "/logout");
+  if (!business) {
+    req.session.flash = {
+      type: "error",
+      text: "No encontramos tu comercio todavia. Reintenta en unos segundos.",
+    };
+    return res.redirect("/onboarding/welcome");
+  }
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return next();
   return res.redirect(gate.redirectTo);
@@ -795,7 +801,7 @@ app.get("/r/:refCode", (req, res) => {
   res.redirect(`/register?ref=${encodeURIComponent(refCode)}`);
 });
 
-app.post("/register", (req, res) => {
+app.post("/register", async (req, res) => {
   const { full_name, business_name, whatsapp, email, password } = req.body;
   const cleanEmail = String(email || "").trim().toLowerCase();
   const minPassword = String(password || "");
@@ -855,6 +861,7 @@ app.post("/register", (req, res) => {
   };
 
   clearCookie(res, "windi_ref_code");
+  await pushMirrorNow();
 
   return flashAndRedirect(req, res, "success", "Cuenta creada correctamente.", "/onboarding/welcome");
 });
