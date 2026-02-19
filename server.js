@@ -135,6 +135,20 @@ function flashAndRedirect(req, res, type, text, to) {
   return res.redirect(to);
 }
 
+async function withTimeout(promise, ms) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function renderBusinessProvisioning(res) {
   return res.status(503).send(`
     <!doctype html>
@@ -195,12 +209,19 @@ function getBusinessByUserId(userId) {
   return db.prepare("SELECT * FROM businesses WHERE user_id = ?").get(userId);
 }
 
-function resolveBusinessForUser(userId) {
+async function resolveBusinessForUser(userId, { waitForPull = false } = {}) {
   let business = getBusinessByUserId(userId);
   if (business) return business;
   if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
-    // Non-blocking refresh to avoid slow auth requests in serverless.
-    pullMirrorNow();
+    if (waitForPull) {
+      try {
+        await withTimeout(pullMirrorNow(), 2500);
+      } catch (_error) {
+        // Ignore timeout/network issues and fallback to current local state.
+      }
+    } else {
+      pullMirrorNow();
+    }
     business = getBusinessByUserId(userId);
   }
   return business || null;
@@ -466,9 +487,9 @@ function canCreateProductForBusiness(businessId) {
   return { allowed: Number(total) < limit, maxProducts: limit, total: Number(total) };
 }
 
-function ensureActiveSubscriptionAccess(req, res, next) {
+async function ensureActiveSubscriptionAccess(req, res, next) {
   if (!req.session?.user || req.session.user.role !== "COMMERCE") return next();
-  const business = resolveBusinessForUser(req.session.user.id);
+  const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
   if (!business) {
     req.session.flash = {
       type: "error",
@@ -846,7 +867,7 @@ app.get("/r/:refCode", (req, res) => {
   res.redirect(`/register?ref=${encodeURIComponent(refCode)}`);
 });
 
-app.post("/register", (req, res) => {
+app.post("/register", async (req, res) => {
   const { full_name, business_name, whatsapp, email, password } = req.body;
   const cleanEmail = String(email || "").trim().toLowerCase();
   const minPassword = String(password || "");
@@ -906,17 +927,25 @@ app.post("/register", (req, res) => {
   };
 
   clearCookie(res, "windi_ref_code");
-  scheduleMirrorPush();
+  if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
+    try {
+      await withTimeout(pushMirrorNow(), 5000);
+    } catch (_error) {
+      scheduleMirrorPush();
+    }
+  } else {
+    scheduleMirrorPush();
+  }
 
   return flashAndRedirect(req, res, "success", "Cuenta creada correctamente.", "/onboarding/welcome");
 });
 
-app.get("/login", (req, res) => {
+app.get("/login", async (req, res) => {
   if (req.session.user) {
     const role = req.session.user.role || "COMMERCE";
     if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
     if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
-    const business = resolveBusinessForUser(req.session.user.id);
+    const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
     if (!business) return renderBusinessProvisioning(res);
     const gate = resolveCommerceGate(business.id);
     return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
@@ -924,7 +953,7 @@ app.get("/login", (req, res) => {
   res.render("auth-login", { title: "Iniciar sesion | Windi Menu" });
 });
 
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
 
@@ -942,7 +971,7 @@ app.post("/login", (req, res) => {
   } else if (role === "ADMIN") {
     target = "/admin/affiliate-sales";
   } else {
-    const business = resolveBusinessForUser(user.id);
+    const business = await resolveBusinessForUser(user.id, { waitForPull: true });
     if (business) {
       const gate = resolveCommerceGate(business.id);
       target = gate.allowed ? "/app" : gate.redirectTo;
@@ -971,8 +1000,8 @@ app.get("/support", (_req, res) => {
   res.status(200).send("Soporte Windi Menu: hola@windimenu.com");
 });
 
-app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
-  const business = resolveBusinessForUser(req.session.user.id);
+app.get("/onboarding/welcome", requireRole("COMMERCE"), async (req, res) => {
+  const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
   if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
@@ -982,8 +1011,8 @@ app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
   });
 });
 
-app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
-  const business = resolveBusinessForUser(req.session.user.id);
+app.get("/onboarding/plan", requireRole("COMMERCE"), async (req, res) => {
+  const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
   if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
@@ -1000,8 +1029,8 @@ app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
   });
 });
 
-app.get("/onboarding/checkout", requireRole("COMMERCE"), (req, res) => {
-  const business = resolveBusinessForUser(req.session.user.id);
+app.get("/onboarding/checkout", requireRole("COMMERCE"), async (req, res) => {
+  const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
   if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
