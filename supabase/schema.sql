@@ -171,3 +171,9 @@ create index if not exists idx_delivery_zones_business_id on public.delivery_zon
 create index if not exists idx_business_hours_business_id on public.business_hours(business_id);
 create index if not exists idx_affiliate_sales_affiliate_id on public.affiliate_sales(affiliate_id);
 create index if not exists idx_affiliate_sales_status on public.affiliate_sales(status);
+
+alter table if exists public.subscriptions add column if not exists payment_provider text;
+alter table if exists public.subscriptions add column if not exists provider_preference_id text;
+alter table if exists public.subscriptions add column if not exists provider_payment_id text;
+alter table if exists public.subscriptions add column if not exists external_reference text;
+alter table if exists public.subscriptions add column if not exists last_provider_status text;

@@ -23,6 +23,9 @@ const RUNTIME_SYNC =
   process.env.SUPABASE_RUNTIME_SYNC === "1" ||
   (process.env.SUPABASE_RUNTIME_SYNC !== "0" && HAS_SUPABASE_DB);
 const SUPABASE_PRIMARY = process.env.SUPABASE_PRIMARY === "1";
+const MP_ACCESS_TOKEN = String(process.env.MP_ACCESS_TOKEN || "").trim();
+const MP_WEBHOOK_URL =
+  String(process.env.MP_WEBHOOK_URL || "").trim() || `${BASE_URL}/webhooks/mercadopago`;
 
 let pushInFlight = false;
 let pushScheduled = false;
@@ -350,6 +353,78 @@ function paymentMethodsForBusiness(business) {
   };
 }
 
+function normalizeMoneyValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round(numeric * 100) / 100;
+}
+
+async function createMercadoPagoPreference({ subscription, plan, business, user }) {
+  if (!MP_ACCESS_TOKEN) {
+    throw new Error("Mercado Pago no esta configurado.");
+  }
+
+  const payload = {
+    items: [
+      {
+        title: `${plan.name} - ${business.business_name}`,
+        quantity: 1,
+        currency_id: "ARS",
+        unit_price: normalizeMoneyValue(subscription.amount),
+      },
+    ],
+    payer: {
+      email: user.email,
+      name: user.full_name,
+    },
+    metadata: {
+      subscription_id: subscription.id,
+      business_id: business.id,
+      plan_id: plan.id,
+    },
+    external_reference: subscription.external_reference,
+    notification_url: MP_WEBHOOK_URL,
+    back_urls: {
+      success: `${BASE_URL}/app/plans?payment=success`,
+      pending: `${BASE_URL}/app/plans?payment=pending`,
+      failure: `${BASE_URL}/app/plans?payment=failure`,
+    },
+    auto_return: "approved",
+  };
+
+  const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error Mercado Pago (${response.status}): ${text.slice(0, 180)}`);
+  }
+
+  return response.json();
+}
+
+async function getMercadoPagoPayment(paymentId) {
+  if (!MP_ACCESS_TOKEN) throw new Error("Mercado Pago no esta configurado.");
+  const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`No se pudo consultar pago ${paymentId}: ${text.slice(0, 180)}`);
+  }
+  return response.json();
+}
+
 function ensurePendingAffiliateSaleForSubscription(subscriptionId) {
   const subscription = db
     .prepare(
@@ -608,6 +683,65 @@ app.get("/forgot-password", (_req, res) => {
   res.render("auth-forgot", { title: "Recuperar clave | Windi Menu" });
 });
 
+app.post("/webhooks/mercadopago", async (req, res) => {
+  try {
+    const queryPaymentId = req.query["data.id"] || req.query.id;
+    const bodyPaymentId = req.body?.data?.id || req.body?.id;
+    const paymentId = String(queryPaymentId || bodyPaymentId || "").trim();
+    if (!paymentId) return res.status(200).json({ ok: true, ignored: true });
+
+    const payment = await getMercadoPagoPayment(paymentId);
+    const externalReference = String(payment.external_reference || "").trim();
+    const providerStatus = String(payment.status || "").trim().toLowerCase();
+    const amount = normalizeMoneyValue(payment.transaction_amount || 0);
+
+    let subscription = null;
+    if (externalReference) {
+      subscription = db
+        .prepare("SELECT * FROM subscriptions WHERE external_reference = ? ORDER BY id DESC LIMIT 1")
+        .get(externalReference);
+    }
+    if (!subscription && payment.metadata?.subscription_id) {
+      subscription = db
+        .prepare("SELECT * FROM subscriptions WHERE id = ?")
+        .get(Number(payment.metadata.subscription_id));
+    }
+    if (!subscription) {
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    const paidAlready = String(subscription.status || "").toLowerCase() === "paid";
+    let nextStatus = "pending";
+    if (providerStatus === "approved") nextStatus = "paid";
+    else if (["rejected", "cancelled", "refunded", "charged_back"].includes(providerStatus)) nextStatus = providerStatus;
+    else if (providerStatus) nextStatus = "pending";
+
+    db.prepare(
+      `UPDATE subscriptions
+       SET status = ?, provider_payment_id = ?, last_provider_status = ?, amount = ?,
+           paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(
+      nextStatus,
+      String(payment.id || paymentId),
+      providerStatus || null,
+      amount > 0 ? amount : normalizeMoneyValue(subscription.amount),
+      nextStatus,
+      subscription.id
+    );
+
+    if (!paidAlready && nextStatus === "paid") {
+      ensurePendingAffiliateSaleForSubscription(subscription.id);
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("Webhook Mercado Pago fallo:", error.message);
+    return res.status(200).json({ ok: true });
+  }
+});
+
 app.use("/app", requireRole("COMMERCE"));
 
 app.get("/app", requireAuth, (req, res) => {
@@ -634,6 +768,110 @@ app.get("/app", requireAuth, (req, res) => {
     totals,
     activePage: "dashboard",
   });
+});
+
+app.get("/app/plans", requireAuth, (req, res) => {
+  const business = getBusinessByUserId(req.session.user.id);
+  const plans = db
+    .prepare("SELECT id, name, price, is_active FROM plans WHERE is_active = 1 ORDER BY price ASC, id ASC")
+    .all();
+
+  const subscriptions = db
+    .prepare(
+      `SELECT s.*, p.name AS plan_name
+       FROM subscriptions s
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.business_id = ?
+       ORDER BY s.created_at DESC
+       LIMIT 20`
+    )
+    .all(business.id);
+
+  const currentPaid = db
+    .prepare(
+      `SELECT s.*, p.name AS plan_name
+       FROM subscriptions s
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.business_id = ? AND LOWER(s.status) = 'paid'
+       ORDER BY COALESCE(s.paid_at, s.created_at) DESC
+       LIMIT 1`
+    )
+    .get(business.id);
+
+  res.render("app/plans", {
+    title: "Planes y facturacion | Windi Menu",
+    business,
+    plans,
+    subscriptions,
+    currentPaid,
+    paymentState: String(req.query.payment || "").trim().toLowerCase(),
+    activePage: "plans",
+    mercadopagoReady: Boolean(MP_ACCESS_TOKEN),
+  });
+});
+
+app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
+  const business = getBusinessByUserId(req.session.user.id);
+  const user = db.prepare("SELECT id, email, full_name FROM users WHERE id = ?").get(req.session.user.id);
+  const planId = Number(req.params.id);
+  const plan = db.prepare("SELECT * FROM plans WHERE id = ? AND is_active = 1").get(planId);
+
+  if (!plan) {
+    return flashAndRedirect(req, res, "error", "Plan no disponible.", "/app/plans");
+  }
+
+  if (!MP_ACCESS_TOKEN) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Pasarela no configurada. Configura MP_ACCESS_TOKEN en el servidor.",
+      "/app/plans"
+    );
+  }
+
+  const amount = normalizeMoneyValue(plan.price);
+  const result = db
+    .prepare(
+      `INSERT INTO subscriptions
+       (business_id, plan_id, amount, status, payment_provider, created_at, updated_at)
+       VALUES (?, ?, ?, 'pending', 'mercadopago', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    )
+    .run(business.id, plan.id, amount);
+
+  const subscriptionId = Number(result.lastInsertRowid);
+  const externalReference = `SUB-${subscriptionId}-BIZ-${business.id}`;
+  db.prepare("UPDATE subscriptions SET external_reference = ? WHERE id = ?").run(externalReference, subscriptionId);
+
+  try {
+    const preference = await createMercadoPagoPreference({
+      subscription: { id: subscriptionId, amount, external_reference: externalReference },
+      plan,
+      business,
+      user,
+    });
+
+    db.prepare(
+      `UPDATE subscriptions
+       SET provider_preference_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(String(preference.id || ""), subscriptionId);
+
+    const checkoutUrl = preference.init_point || preference.sandbox_init_point;
+    if (!checkoutUrl) {
+      throw new Error("Mercado Pago no devolvio URL de checkout.");
+    }
+
+    return res.redirect(checkoutUrl);
+  } catch (error) {
+    console.error("Error creando checkout Mercado Pago:", error.message);
+    db.prepare(
+      `UPDATE subscriptions
+       SET status = 'failed', last_provider_status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(error.message.slice(0, 255), subscriptionId);
+    return flashAndRedirect(req, res, "error", "No se pudo iniciar el pago. Intenta nuevamente.", "/app/plans");
+  }
 });
 
 app.get("/app/business", requireAuth, (req, res) => {
@@ -1578,9 +1816,52 @@ app.post("/admin/affiliate-payouts/generate", requireRole("ADMIN"), (req, res) =
   return flashAndRedirect(req, res, "success", "Payout generado correctamente.", "/admin/affiliate-payouts");
 });
 
+app.get("/admin/plans", requireRole("ADMIN"), (req, res) => {
+  const plans = db.prepare("SELECT * FROM plans ORDER BY price ASC, id ASC").all();
+  res.render("admin/plans", {
+    title: "Planes | Windi Menu",
+    plans,
+  });
+});
+
+app.post("/admin/plans", requireRole("ADMIN"), (req, res) => {
+  const name = String(req.body.name || "").trim();
+  const price = normalizeMoneyValue(req.body.price || 0);
+  if (!name) return flashAndRedirect(req, res, "error", "El nombre del plan es obligatorio.", "/admin/plans");
+  if (price <= 0) return flashAndRedirect(req, res, "error", "El precio debe ser mayor a 0.", "/admin/plans");
+
+  db.prepare("INSERT INTO plans (name, price, is_active, created_at) VALUES (?, ?, 1, CURRENT_TIMESTAMP)").run(
+    name,
+    price
+  );
+  return flashAndRedirect(req, res, "success", "Plan creado.", "/admin/plans");
+});
+
+app.post("/admin/plans/:id/update", requireRole("ADMIN"), (req, res) => {
+  const planId = Number(req.params.id);
+  const plan = db.prepare("SELECT * FROM plans WHERE id = ?").get(planId);
+  if (!plan) return flashAndRedirect(req, res, "error", "Plan no encontrado.", "/admin/plans");
+
+  const name = String(req.body.name || "").trim();
+  const price = normalizeMoneyValue(req.body.price || 0);
+  if (!name) return flashAndRedirect(req, res, "error", "El nombre del plan es obligatorio.", "/admin/plans");
+  if (price <= 0) return flashAndRedirect(req, res, "error", "El precio debe ser mayor a 0.", "/admin/plans");
+
+  db.prepare("UPDATE plans SET name = ?, price = ? WHERE id = ?").run(name, price, planId);
+  return flashAndRedirect(req, res, "success", "Plan actualizado.", "/admin/plans");
+});
+
+app.post("/admin/plans/:id/toggle-active", requireRole("ADMIN"), (req, res) => {
+  const planId = Number(req.params.id);
+  const plan = db.prepare("SELECT * FROM plans WHERE id = ?").get(planId);
+  if (!plan) return flashAndRedirect(req, res, "error", "Plan no encontrado.", "/admin/plans");
+  db.prepare("UPDATE plans SET is_active = ? WHERE id = ?").run(plan.is_active ? 0 : 1, planId);
+  return flashAndRedirect(req, res, "success", "Estado del plan actualizado.", "/admin/plans");
+});
+
 app.get("/admin/subscriptions", requireRole("ADMIN"), (req, res) => {
   const businesses = db.prepare("SELECT id, business_name FROM businesses ORDER BY business_name").all();
-  const plans = db.prepare("SELECT id, name, price FROM plans ORDER BY price ASC").all();
+  const plans = db.prepare("SELECT id, name, price FROM plans WHERE is_active = 1 ORDER BY price ASC").all();
   const subscriptions = db
     .prepare(
       `SELECT s.*, b.business_name, p.name AS plan_name

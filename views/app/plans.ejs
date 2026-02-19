@@ -1,0 +1,91 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+
+    <header class="page-head">
+      <div>
+        <h1>Planes y pagos</h1>
+        <p class="muted">Elige tu plan y completa el pago con pasarela online.</p>
+      </div>
+    </header>
+
+    <% if (paymentState === "success") { %>
+      <section class="card"><span class="tag tag-ok">Pago recibido</span></section>
+    <% } %>
+    <% if (paymentState === "pending") { %>
+      <section class="card"><span class="tag tag-warn">Pago pendiente</span></section>
+    <% } %>
+    <% if (paymentState === "failure") { %>
+      <section class="card"><span class="tag">Pago rechazado</span></section>
+    <% } %>
+
+    <% if (!mercadopagoReady) { %>
+      <section class="card">
+        <h2>Pasarela no configurada</h2>
+        <p class="muted">Falta configurar <code>MP_ACCESS_TOKEN</code> en variables de entorno.</p>
+      </section>
+    <% } %>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <h3>Plan actual</h3>
+        <strong><%= currentPaid ? currentPaid.plan_name : 'Sin plan activo' %></strong>
+      </article>
+      <article class="stat-card">
+        <h3>Ultimo pago</h3>
+        <strong><%= currentPaid ? '$' + Number(currentPaid.amount).toLocaleString("es-AR") : '-' %></strong>
+      </article>
+      <article class="stat-card">
+        <h3>Estado</h3>
+        <strong><%= currentPaid ? String(currentPaid.status).toUpperCase() : 'N/A' %></strong>
+      </article>
+    </section>
+
+    <section class="plan-grid">
+      <% plans.forEach((plan) => { %>
+        <article class="card">
+          <h2><%= plan.name %></h2>
+          <p class="price">$<%= Number(plan.price).toLocaleString("es-AR") %></p>
+          <form method="post" action="/app/plans/<%= plan.id %>/checkout">
+            <button class="btn btn-primary" type="submit" <%= mercadopagoReady ? '' : 'disabled' %>>
+              Pagar plan
+            </button>
+          </form>
+        </article>
+      <% }) %>
+    </section>
+
+    <section class="card">
+      <h2>Historial de suscripciones</h2>
+      <% if (!subscriptions.length) { %>
+        <p class="muted">Todavia no tenes suscripciones.</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Plan</th>
+                <th>Monto</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% subscriptions.forEach((s) => { %>
+                <tr>
+                  <td><%= s.created_at %></td>
+                  <td><%= s.plan_name %></td>
+                  <td>$<%= Number(s.amount).toLocaleString("es-AR") %></td>
+                  <td><span class="tag"><%= String(s.status).toUpperCase() %></span></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

@@ -21,7 +21,7 @@
       <h2>Suscripciones recientes</h2>
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Status</th><th>Accion</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Status</th><th>Pasarela</th><th>Accion</th></tr></thead>
           <tbody>
             <% subscriptions.forEach((s) => { %>
               <tr>
@@ -30,6 +30,7 @@
                 <td><%= s.plan_name %></td>
                 <td>$<%= Number(s.amount).toLocaleString("es-AR") %></td>
                 <td><span class="tag"><%= s.status %></span></td>
+                <td><%= s.payment_provider || '-' %> <%= s.last_provider_status ? `(${s.last_provider_status})` : '' %></td>
                 <td>
                   <% if (String(s.status).toLowerCase() !== 'paid') { %>
                     <form method="post" action="/admin/subscriptions/<%= s.id %>/mark-paid">

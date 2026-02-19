@@ -125,6 +125,11 @@ function initDb() {
       plan_id INTEGER NOT NULL,
       amount REAL NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
+      payment_provider TEXT,
+      provider_preference_id TEXT,
+      provider_payment_id TEXT,
+      external_reference TEXT,
+      last_provider_status TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       paid_at TEXT,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -280,6 +285,22 @@ function initDb() {
     ];
     for (const [name, sql] of affiliateMigrations) {
       if (!affiliateColumns.some((column) => column.name === name)) {
+        db.exec(sql);
+      }
+    }
+  }
+
+  const subscriptionColumns = db.prepare("PRAGMA table_info(subscriptions)").all();
+  if (subscriptionColumns.length > 0) {
+    const subscriptionMigrations = [
+      ["payment_provider", "ALTER TABLE subscriptions ADD COLUMN payment_provider TEXT;"],
+      ["provider_preference_id", "ALTER TABLE subscriptions ADD COLUMN provider_preference_id TEXT;"],
+      ["provider_payment_id", "ALTER TABLE subscriptions ADD COLUMN provider_payment_id TEXT;"],
+      ["external_reference", "ALTER TABLE subscriptions ADD COLUMN external_reference TEXT;"],
+      ["last_provider_status", "ALTER TABLE subscriptions ADD COLUMN last_provider_status TEXT;"],
+    ];
+    for (const [name, sql] of subscriptionMigrations) {
+      if (!subscriptionColumns.some((column) => column.name === name)) {
         db.exec(sql);
       }
     }

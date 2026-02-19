@@ -252,8 +252,9 @@ function createSeedData() {
   });
 
   const affiliate = ensureAffiliate(affiliateUser.id, "AFI25DEMO");
-  const plan = ensurePlan("Plan Pro", 12000);
-  ensurePlan("Plan Premium", 18000);
+  const plan = ensurePlan("Basico", 12999);
+  ensurePlan("Premium", 16999);
+  ensurePlan("Elite", 21999);
 
   const business = ensureBusinessForUser(commerceUser.id, affiliate.id);
   ensureBusinessHours(business.id);

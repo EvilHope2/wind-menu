@@ -107,6 +107,8 @@ git push -u origin main
 4. Variables de entorno en Vercel:
    - `SESSION_SECRET`
    - `BASE_URL` (tu dominio Vercel)
+   - `MP_ACCESS_TOKEN` (Mercado Pago backend)
+   - `MP_WEBHOOK_URL` (opcional, default `${BASE_URL}/webhooks/mercadopago`)
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
@@ -144,6 +146,14 @@ SUPABASE_PULL_INTERVAL_MS=30000
 - En mutaciones (POST/PUT/PATCH/DELETE): hace push de SQLite -> Supabase.
 - Permite mantener la logica actual mientras migras queries nativas a Postgres.
 - Con `SUPABASE_PRIMARY=1`, si Supabase no responde la app no inicia (modo produccion estricto).
+
+## Planes y pagos online
+
+- Comercio: `/app/plans` para elegir plan y pagar.
+- Admin: `/admin/plans` para crear/editar/activar planes.
+- Admin: `/admin/subscriptions` para ver estado de suscripciones y pasarela.
+- Webhook: `POST /webhooks/mercadopago`.
+- Cuando Mercado Pago confirma `approved`, la suscripcion pasa a `paid` y la venta afiliada se crea en `PENDING`.
 
 ## Estructura
 
