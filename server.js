@@ -1350,6 +1350,10 @@ app.get("/affiliate/referrals", requireRole("AFFILIATE"), (req, res) => {
   });
 });
 
+app.get("/admin", requireRole("ADMIN"), (_req, res) => {
+  res.redirect("/admin/affiliate-sales");
+});
+
 app.get("/admin/affiliates", requireRole("ADMIN"), (req, res) => {
   const affiliates = db
     .prepare(
