@@ -209,6 +209,39 @@ function getBusinessByUserId(userId) {
   return db.prepare("SELECT * FROM businesses WHERE user_id = ?").get(userId);
 }
 
+function ensureBusinessForUser(userId) {
+  let business = getBusinessByUserId(userId);
+  if (business) return business;
+
+  const user = db.prepare("SELECT id, full_name, email, whatsapp FROM users WHERE id = ?").get(userId);
+  if (!user) return null;
+
+  const rawBase =
+    slugify(String(user.email || "").split("@")[0]) ||
+    slugify(String(user.full_name || "")) ||
+    `comercio-${user.id}`;
+  const slug = uniqueSlug(rawBase, (candidate) =>
+    Boolean(db.prepare("SELECT 1 FROM businesses WHERE slug = ?").get(candidate))
+  );
+
+  const result = db
+    .prepare(
+      `INSERT INTO businesses
+       (user_id, business_name, slug, whatsapp, has_completed_onboarding, onboarding_step, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, 'welcome', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    )
+    .run(
+      user.id,
+      String(user.full_name || "Mi comercio").trim() || "Mi comercio",
+      slug,
+      String(user.whatsapp || "").trim() || "5491100000000"
+    );
+
+  business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(result.lastInsertRowid);
+  scheduleMirrorPush();
+  return business;
+}
+
 async function resolveBusinessForUser(userId, { waitForPull = false } = {}) {
   let business = getBusinessByUserId(userId);
   if (business) return business;
@@ -223,6 +256,9 @@ async function resolveBusinessForUser(userId, { waitForPull = false } = {}) {
       pullMirrorNow();
     }
     business = getBusinessByUserId(userId);
+  }
+  if (!business) {
+    business = ensureBusinessForUser(userId);
   }
   return business || null;
 }
