@@ -117,6 +117,18 @@ app.use((req, res, next) => {
   next();
 });
 
+if (IS_VERCEL) {
+  app.use(async (_req, res, next) => {
+    try {
+      await bootstrap();
+      return next();
+    } catch (error) {
+      console.error(error.message);
+      return res.status(503).send("Servicio iniciando. Reintenta en unos segundos.");
+    }
+  });
+}
+
 function flashAndRedirect(req, res, type, text, to) {
   req.session.flash = { type, text };
   return res.redirect(to);
@@ -1966,31 +1978,37 @@ async function bootstrap() {
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
-  if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
-    try {
-      await applySupabaseSchema();
-      await pullSupabaseToSqlite();
-      console.log("Mirror pull inicial desde Supabase OK");
-      const userCount = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
-      if (!userCount) {
-        createSeedData();
-        await pushMirrorNow();
+    if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
+      try {
+        await applySupabaseSchema();
+        await pullSupabaseToSqlite();
+        console.log("Mirror pull inicial desde Supabase OK");
+        const userCount = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
+        if (!userCount) {
+          createSeedData();
+          await pushMirrorNow();
+        }
+      } catch (error) {
+        if (SUPABASE_PRIMARY) {
+          throw new Error(`Modo SUPABASE_PRIMARY activo. No se puede iniciar sin Supabase: ${error.message}`);
+        }
+        console.error("Mirror pull inicial fallo, sigue con SQLite local:", error.message);
+        const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
+        if (!localUsers) createSeedData();
       }
-    } catch (error) {
-      if (SUPABASE_PRIMARY) {
-        throw new Error(`Modo SUPABASE_PRIMARY activo. No se puede iniciar sin Supabase: ${error.message}`);
-      }
-      console.error("Mirror pull inicial fallo, sigue con SQLite local:", error.message);
+    } else {
       const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
       if (!localUsers) createSeedData();
     }
-  } else {
-    const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
-    if (!localUsers) createSeedData();
-  }
   })();
 
-  return bootstrapPromise;
+  try {
+    await bootstrapPromise;
+    return bootstrapPromise;
+  } catch (error) {
+    bootstrapPromise = null;
+    throw error;
+  }
 }
 
 async function bootstrapAndStart() {
@@ -2007,9 +2025,6 @@ async function bootstrapAndStart() {
 }
 
 if (IS_VERCEL) {
-  bootstrap().catch((error) => {
-    console.error(error.message);
-  });
   module.exports = app;
 } else {
   bootstrapAndStart().catch((error) => {
