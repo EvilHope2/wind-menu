@@ -2,9 +2,7 @@ require("dotenv").config();
 
 const path = require("path");
 const express = require("express");
-const session = require("express-session");
-const pgSessionFactory = require("connect-pg-simple");
-const { Pool } = require("pg");
+const cookieSession = require("cookie-session");
 const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
 
@@ -94,32 +92,13 @@ app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-let sessionStore = undefined;
-if (HAS_SUPABASE_DB) {
-  const PgSession = pgSessionFactory(session);
-  const pool = new Pool({
-    connectionString: process.env.SUPABASE_DB_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-  sessionStore = new PgSession({
-    pool,
-    tableName: "user_sessions",
-    createTableIfMissing: true,
-  });
-}
-
 app.use(
-  session({
+  cookieSession({
     name: "windi.sid",
-    secret: process.env.SESSION_SECRET || "windi-menu-local-secret",
-    resave: false,
-    saveUninitialized: false,
-    store: sessionStore,
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 8,
-      sameSite: "lax",
-      secure: IS_SECURE_ENV,
-    },
+    keys: [process.env.SESSION_SECRET || "windi-menu-local-secret"],
+    maxAge: 1000 * 60 * 60 * 8,
+    sameSite: "lax",
+    secure: IS_SECURE_ENV,
   })
 );
 
@@ -708,9 +687,8 @@ app.post("/login", (req, res) => {
 });
 
 app.post("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/");
-  });
+  req.session = null;
+  res.redirect("/");
 });
 
 app.get("/forgot-password", (_req, res) => {
