@@ -1,7 +1,18 @@
 const path = require("path");
+const fs = require("fs");
 const Database = require("better-sqlite3");
 
-const dbPath = path.join(__dirname, "..", "data", "windi_menu.db");
+const isVercel = process.env.VERCEL === "1";
+const configuredPath = process.env.SQLITE_PATH;
+const dbPath =
+  configuredPath ||
+  (isVercel ? "/tmp/windi_menu.db" : path.join(__dirname, "..", "data", "windi_menu.db"));
+
+const dbDir = path.dirname(dbPath);
+if (dbDir && !fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");

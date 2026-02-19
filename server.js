@@ -17,6 +17,7 @@ const { applySupabaseSchema } = require("./src/sync/schema");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const IS_VERCEL = process.env.VERCEL === "1";
 const HAS_SUPABASE_DB = Boolean(process.env.SUPABASE_DB_URL);
 const RUNTIME_SYNC =
   process.env.SUPABASE_RUNTIME_SYNC === "1" ||
@@ -1673,7 +1674,13 @@ app.use((_req, res) => {
   res.status(404).render("404", { title: "Pagina no encontrada | Windi Menu" });
 });
 
-async function bootstrapAndStart() {
+let bootstrapPromise = null;
+let pullTimer = null;
+
+async function bootstrap() {
+  if (bootstrapPromise) return bootstrapPromise;
+
+  bootstrapPromise = (async () => {
   if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
     try {
       await applySupabaseSchema();
@@ -1686,8 +1693,7 @@ async function bootstrapAndStart() {
       }
     } catch (error) {
       if (SUPABASE_PRIMARY) {
-        console.error("Modo SUPABASE_PRIMARY activo. No se puede iniciar sin Supabase:", error.message);
-        process.exit(1);
+        throw new Error(`Modo SUPABASE_PRIMARY activo. No se puede iniciar sin Supabase: ${error.message}`);
       }
       console.error("Mirror pull inicial fallo, sigue con SQLite local:", error.message);
       const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
@@ -1697,11 +1703,17 @@ async function bootstrapAndStart() {
     const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
     if (!localUsers) createSeedData();
   }
+  })();
 
+  return bootstrapPromise;
+}
+
+async function bootstrapAndStart() {
+  await bootstrap();
   app.listen(PORT, () => {
     console.log(`Windi Menu corriendo en ${BASE_URL}`);
-    if (RUNTIME_SYNC && HAS_SUPABASE_DB && PULL_INTERVAL_MS > 0) {
-      setInterval(() => {
+    if (!IS_VERCEL && RUNTIME_SYNC && HAS_SUPABASE_DB && PULL_INTERVAL_MS > 0) {
+      pullTimer = setInterval(() => {
         pullMirrorNow();
       }, PULL_INTERVAL_MS);
       console.log(`Mirror pull periodico activo cada ${PULL_INTERVAL_MS}ms`);
@@ -1709,4 +1721,14 @@ async function bootstrapAndStart() {
   });
 }
 
-bootstrapAndStart();
+if (IS_VERCEL) {
+  bootstrap().catch((error) => {
+    console.error(error.message);
+  });
+  module.exports = app;
+} else {
+  bootstrapAndStart().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
