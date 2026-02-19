@@ -45,12 +45,35 @@
 
     <section class="plan-grid">
       <% plans.forEach((plan) => { %>
+        <% 
+          const hasCurrent = Boolean(currentPaid);
+          const isCurrent = hasCurrent && Number(currentPaid.plan_id) === Number(plan.id);
+          const currentPrice = hasCurrent ? Number(currentPaid.amount || 0) : 0;
+          const targetPrice = Number(plan.price || 0);
+          const isUpgrade = hasCurrent && !isCurrent && targetPrice > currentPrice;
+          const isDowngrade = hasCurrent && !isCurrent && targetPrice < currentPrice;
+        %>
         <article class="card">
           <h2><%= plan.name %></h2>
+          <% if (isCurrent) { %>
+            <p class="tag tag-ok">Plan actual</p>
+          <% } else if (isUpgrade) { %>
+            <p class="tag tag-promo">Upgrade</p>
+          <% } else if (isDowngrade) { %>
+            <p class="tag">Downgrade</p>
+          <% } %>
           <p class="price">$<%= Number(plan.price).toLocaleString("es-AR") %></p>
           <form method="post" action="/app/plans/<%= plan.id %>/checkout">
             <button class="btn btn-primary" type="submit" <%= mercadopagoReady ? '' : 'disabled' %>>
-              Pagar plan
+              <% if (isCurrent) { %>
+                Renovar plan
+              <% } else if (isUpgrade) { %>
+                Cambiar a este plan
+              <% } else if (isDowngrade) { %>
+                Bajar a este plan
+              <% } else { %>
+                Contratar plan
+              <% } %>
             </button>
           </form>
         </article>
