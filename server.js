@@ -993,7 +993,15 @@ app.post("/login", async (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
 
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  if (!user && RUNTIME_SYNC && HAS_SUPABASE_DB) {
+    try {
+      await withTimeout(pullMirrorNow(), 2000);
+      user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    } catch (_error) {
+      // Ignore and fall through to invalid credentials.
+    }
+  }
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return flashAndRedirect(req, res, "error", "Email o clave invalidos.", "/login");
   }
