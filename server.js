@@ -135,6 +135,32 @@ function flashAndRedirect(req, res, type, text, to) {
   return res.redirect(to);
 }
 
+function renderBusinessProvisioning(res) {
+  return res.status(503).send(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Estamos preparando tu cuenta</title>
+        <style>
+          body{font-family:Inter,Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a}
+          .card{max-width:560px;margin:48px auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px}
+          a{display:inline-block;margin-right:12px;margin-top:12px}
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>Estamos preparando tu comercio</h1>
+          <p>Tu cuenta existe, pero todavia se esta sincronizando. Reintenta en unos segundos.</p>
+          <a href="/onboarding/plan">Reintentar</a>
+          <a href="/logout">Cerrar sesion</a>
+        </div>
+      </body>
+    </html>
+  `);
+}
+
 function parseCookies(req) {
   const cookieHeader = req.headers.cookie || "";
   const pairs = cookieHeader.split(";").map((part) => part.trim()).filter(Boolean);
@@ -891,7 +917,7 @@ app.get("/login", (req, res) => {
     if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
     if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
     const business = resolveBusinessForUser(req.session.user.id);
-    if (!business) return res.redirect("/onboarding/plan");
+    if (!business) return renderBusinessProvisioning(res);
     const gate = resolveCommerceGate(business.id);
     return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
   }
@@ -932,6 +958,11 @@ app.post("/logout", (req, res) => {
   res.redirect("/");
 });
 
+app.get("/logout", (req, res) => {
+  req.session = null;
+  res.redirect("/login");
+});
+
 app.get("/forgot-password", (_req, res) => {
   res.render("auth-forgot", { title: "Recuperar clave | Windi Menu" });
 });
@@ -942,7 +973,7 @@ app.get("/support", (_req, res) => {
 
 app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
   const business = resolveBusinessForUser(req.session.user.id);
-  if (!business) return flashAndRedirect(req, res, "error", "Estamos preparando tu comercio. Reintenta en unos segundos.", "/onboarding/plan");
+  if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
   res.render("onboarding/welcome", {
@@ -953,7 +984,7 @@ app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
 
 app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
   const business = resolveBusinessForUser(req.session.user.id);
-  if (!business) return flashAndRedirect(req, res, "error", "Estamos preparando tu comercio. Reintenta en unos segundos.", "/login");
+  if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
 
@@ -971,7 +1002,7 @@ app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
 
 app.get("/onboarding/checkout", requireRole("COMMERCE"), (req, res) => {
   const business = resolveBusinessForUser(req.session.user.id);
-  if (!business) return flashAndRedirect(req, res, "error", "Estamos preparando tu comercio. Reintenta en unos segundos.", "/onboarding/plan");
+  if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
 
