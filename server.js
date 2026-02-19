@@ -3,6 +3,8 @@ require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const session = require("express-session");
+const pgSessionFactory = require("connect-pg-simple");
+const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
 
@@ -26,6 +28,7 @@ const SUPABASE_PRIMARY = process.env.SUPABASE_PRIMARY === "1";
 const MP_ACCESS_TOKEN = String(process.env.MP_ACCESS_TOKEN || "").trim();
 const MP_WEBHOOK_URL =
   String(process.env.MP_WEBHOOK_URL || "").trim() || `${BASE_URL}/webhooks/mercadopago`;
+const IS_SECURE_ENV = process.env.NODE_ENV === "production" || IS_VERCEL;
 
 let pushInFlight = false;
 let pushScheduled = false;
@@ -84,19 +87,38 @@ initDb();
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
+app.set("trust proxy", 1);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+let sessionStore = undefined;
+if (HAS_SUPABASE_DB) {
+  const PgSession = pgSessionFactory(session);
+  const pool = new Pool({
+    connectionString: process.env.SUPABASE_DB_URL,
+    ssl: { rejectUnauthorized: false },
+  });
+  sessionStore = new PgSession({
+    pool,
+    tableName: "user_sessions",
+    createTableIfMissing: true,
+  });
+}
+
 app.use(
   session({
+    name: "windi.sid",
     secret: process.env.SESSION_SECRET || "windi-menu-local-secret",
     resave: false,
     saveUninitialized: false,
+    store: sessionStore,
     cookie: {
       maxAge: 1000 * 60 * 60 * 8,
+      sameSite: "lax",
+      secure: IS_SECURE_ENV,
     },
   })
 );
