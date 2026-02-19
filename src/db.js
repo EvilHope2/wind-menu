@@ -61,10 +61,14 @@ function initDb() {
       timezone TEXT NOT NULL DEFAULT 'America/Argentina/Ushuaia',
       affiliate_id INTEGER,
       referred_at TEXT,
+      plan_id INTEGER,
+      has_completed_onboarding INTEGER NOT NULL DEFAULT 0,
+      onboarding_step TEXT NOT NULL DEFAULT 'welcome',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (affiliate_id) REFERENCES affiliates(id) ON DELETE SET NULL
+      FOREIGN KEY (affiliate_id) REFERENCES affiliates(id) ON DELETE SET NULL,
+      FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS affiliates (
@@ -113,8 +117,13 @@ function initDb() {
 
     CREATE TABLE IF NOT EXISTS plans (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT,
+      display_name TEXT,
       name TEXT NOT NULL,
       price REAL NOT NULL DEFAULT 0,
+      price_ars REAL,
+      currency TEXT NOT NULL DEFAULT 'ARS',
+      max_products INTEGER,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -130,11 +139,29 @@ function initDb() {
       provider_payment_id TEXT,
       external_reference TEXT,
       last_provider_status TEXT,
+      current_period_start TEXT,
+      current_period_end TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       paid_at TEXT,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
       FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id INTEGER NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'mercadopago',
+      provider_preference_id TEXT,
+      provider_payment_id TEXT,
+      merchant_order_id TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'ARS',
+      status TEXT NOT NULL DEFAULT 'pending',
+      checkout_url TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      paid_at TEXT,
+      FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS affiliate_payouts (
@@ -213,6 +240,7 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_affiliate_sales_affiliate_id ON affiliate_sales(affiliate_id);
     CREATE INDEX IF NOT EXISTS idx_affiliate_sales_status ON affiliate_sales(status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliate_sales_subscription_unique ON affiliate_sales(subscription_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_payment_unique ON payments(provider_payment_id);
   `);
 
   const businessColumns = db.prepare("PRAGMA table_info(businesses)").all();
@@ -256,6 +284,9 @@ function initDb() {
     ["timezone", "ALTER TABLE businesses ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/Argentina/Ushuaia';"],
     ["affiliate_id", "ALTER TABLE businesses ADD COLUMN affiliate_id INTEGER;"],
     ["referred_at", "ALTER TABLE businesses ADD COLUMN referred_at TEXT;"],
+    ["plan_id", "ALTER TABLE businesses ADD COLUMN plan_id INTEGER;"],
+    ["has_completed_onboarding", "ALTER TABLE businesses ADD COLUMN has_completed_onboarding INTEGER NOT NULL DEFAULT 0;"],
+    ["onboarding_step", "ALTER TABLE businesses ADD COLUMN onboarding_step TEXT NOT NULL DEFAULT 'welcome';"],
   ];
   for (const [name, sql] of businessColumnMigrations) {
     if (!businessColumns.some((column) => column.name === name)) {
@@ -298,6 +329,8 @@ function initDb() {
       ["provider_payment_id", "ALTER TABLE subscriptions ADD COLUMN provider_payment_id TEXT;"],
       ["external_reference", "ALTER TABLE subscriptions ADD COLUMN external_reference TEXT;"],
       ["last_provider_status", "ALTER TABLE subscriptions ADD COLUMN last_provider_status TEXT;"],
+      ["current_period_start", "ALTER TABLE subscriptions ADD COLUMN current_period_start TEXT;"],
+      ["current_period_end", "ALTER TABLE subscriptions ADD COLUMN current_period_end TEXT;"],
     ];
     for (const [name, sql] of subscriptionMigrations) {
       if (!subscriptionColumns.some((column) => column.name === name)) {
@@ -305,6 +338,53 @@ function initDb() {
       }
     }
   }
+
+  const planColumns = db.prepare("PRAGMA table_info(plans)").all();
+  if (planColumns.length > 0) {
+    const planMigrations = [
+      ["code", "ALTER TABLE plans ADD COLUMN code TEXT;"],
+      ["display_name", "ALTER TABLE plans ADD COLUMN display_name TEXT;"],
+      ["price_ars", "ALTER TABLE plans ADD COLUMN price_ars REAL;"],
+      ["currency", "ALTER TABLE plans ADD COLUMN currency TEXT NOT NULL DEFAULT 'ARS';"],
+      ["max_products", "ALTER TABLE plans ADD COLUMN max_products INTEGER;"],
+    ];
+    for (const [name, sql] of planMigrations) {
+      if (!planColumns.some((column) => column.name === name)) {
+        db.exec(sql);
+      }
+    }
+    db.exec("UPDATE plans SET code = UPPER(REPLACE(name, ' ', '_')) WHERE code IS NULL OR TRIM(code) = '';");
+    db.exec("UPDATE plans SET code = 'BASIC' WHERE UPPER(COALESCE(code, '')) IN ('BASICO', 'BASICO_PLAN', 'BASICO_MENSUAL');");
+    db.exec("UPDATE plans SET code = 'PREMIUM' WHERE UPPER(COALESCE(code, '')) IN ('PRO', 'PLAN_PRO');");
+    db.exec("UPDATE plans SET code = 'ELITE' WHERE UPPER(COALESCE(code, '')) IN ('PREMIUM_PLAN', 'PREMIUM_PLUS');");
+    db.exec("UPDATE plans SET display_name = name WHERE display_name IS NULL OR TRIM(display_name) = '';");
+    db.exec("UPDATE plans SET price_ars = price WHERE price_ars IS NULL;");
+    db.exec("UPDATE plans SET currency = 'ARS' WHERE currency IS NULL OR TRIM(currency) = '';");
+  }
+
+  const paymentColumns = db.prepare("PRAGMA table_info(payments)").all();
+  if (paymentColumns.length > 0) {
+    const paymentMigrations = [
+      ["merchant_order_id", "ALTER TABLE payments ADD COLUMN merchant_order_id TEXT;"],
+      ["checkout_url", "ALTER TABLE payments ADD COLUMN checkout_url TEXT;"],
+    ];
+    for (const [name, sql] of paymentMigrations) {
+      if (!paymentColumns.some((column) => column.name === name)) {
+        db.exec(sql);
+      }
+    }
+  }
+
+  db.exec(`
+    UPDATE businesses
+    SET has_completed_onboarding = 1,
+        onboarding_step = 'done'
+    WHERE id IN (
+      SELECT DISTINCT business_id
+      FROM subscriptions
+      WHERE UPPER(COALESCE(status, '')) IN ('ACTIVE', 'PAID')
+    )
+  `);
 }
 
 module.exports = {

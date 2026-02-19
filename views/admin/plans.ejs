@@ -7,8 +7,10 @@
     <section class="card">
       <h1>Planes</h1>
       <form method="post" action="/admin/plans" class="form inline">
-        <input type="text" name="name" placeholder="Nombre del plan" required />
-        <input type="number" step="0.01" min="1" name="price" placeholder="Precio ARS" required />
+        <input type="text" name="code" placeholder="Codigo (BASIC/PREMIUM/ELITE)" required />
+        <input type="text" name="display_name" placeholder="Nombre visible" required />
+        <input type="number" step="0.01" min="1" name="price_ars" placeholder="Precio ARS" required />
+        <input type="number" min="1" name="max_products" placeholder="Max productos (vacío = ilimitado)" />
         <button class="btn btn-primary" type="submit">Crear plan</button>
       </form>
     </section>
@@ -20,8 +22,10 @@
           <thead>
             <tr>
               <th>ID</th>
+              <th>Codigo</th>
               <th>Nombre</th>
               <th>Precio</th>
+              <th>Max productos</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
@@ -30,14 +34,18 @@
             <% plans.forEach((plan) => { %>
               <tr>
                 <td><%= plan.id %></td>
+                <td><code><%= plan.code %></code></td>
                 <td>
                   <form method="post" action="/admin/plans/<%= plan.id %>/update" class="form inline">
-                    <input type="text" name="name" value="<%= plan.name %>" required />
-                    <input type="number" step="0.01" min="1" name="price" value="<%= Number(plan.price) %>" required />
+                    <input type="text" name="code" value="<%= plan.code %>" required />
+                    <input type="text" name="display_name" value="<%= plan.display_name || plan.name %>" required />
+                    <input type="number" step="0.01" min="1" name="price_ars" value="<%= Number(plan.price_ars || plan.price) %>" required />
+                    <input type="number" min="1" name="max_products" value="<%= plan.max_products ?? '' %>" placeholder="Ilimitado" />
                     <button class="btn btn-ghost" type="submit">Guardar</button>
                   </form>
                 </td>
-                <td>$<%= Number(plan.price).toLocaleString("es-AR") %></td>
+                <td>$<%= Number(plan.price_ars || plan.price).toLocaleString("es-AR") %></td>
+                <td><%= plan.max_products === null || plan.max_products === undefined ? 'Ilimitado' : plan.max_products %></td>
                 <td><span class="tag <%= plan.is_active ? 'tag-ok' : '' %>"><%= plan.is_active ? "Activo" : "Inactivo" %></span></td>
                 <td>
                   <form method="post" action="/admin/plans/<%= plan.id %>/toggle-active">

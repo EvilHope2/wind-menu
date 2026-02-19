@@ -38,12 +38,23 @@ function ensureAffiliate(userId, refCode) {
   return db.prepare("SELECT * FROM affiliates WHERE id = ?").get(result.lastInsertRowid);
 }
 
-function ensurePlan(name, price) {
-  const existing = db.prepare("SELECT * FROM plans WHERE name = ?").get(name);
-  if (existing) return existing;
+function ensurePlan({ code, displayName, priceArs, maxProducts }) {
+  const existing = db.prepare("SELECT * FROM plans WHERE code = ?").get(code);
+  if (existing) {
+    db.prepare(
+      `UPDATE plans
+       SET display_name = ?, name = ?, price = ?, price_ars = ?, currency = 'ARS', max_products = ?, is_active = 1
+       WHERE id = ?`
+    ).run(displayName, displayName, priceArs, priceArs, maxProducts ?? null, existing.id);
+    return db.prepare("SELECT * FROM plans WHERE id = ?").get(existing.id);
+  }
   const result = db
-    .prepare("INSERT INTO plans (name, price, is_active) VALUES (?, ?, 1)")
-    .run(name, price);
+    .prepare(
+      `INSERT INTO plans
+       (code, display_name, name, price, price_ars, currency, max_products, is_active)
+       VALUES (?, ?, ?, ?, ?, 'ARS', ?, 1)`
+    )
+    .run(code, displayName, displayName, priceArs, priceArs, maxProducts ?? null);
   return db.prepare("SELECT * FROM plans WHERE id = ?").get(result.lastInsertRowid);
 }
 
@@ -63,7 +74,7 @@ function ensureBusinessForUser(userId, affiliateId) {
        shipping_fee, delivery_enabled, pickup_enabled, minimum_order_amount, free_delivery_over_amount,
        payment_cash_enabled, payment_transfer_enabled, payment_card_enabled, transfer_instructions,
        transfer_alias, transfer_cvu, transfer_account_holder, cash_allow_change,
-       is_temporarily_closed, temporary_closed_message, timezone, affiliate_id, referred_at, cover_url, logo_url)
+      is_temporarily_closed, temporary_closed_message, timezone, affiliate_id, referred_at, cover_url, logo_url)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`
     )
     .run(
@@ -199,8 +210,9 @@ function ensureDemoPendingSales({ affiliateId, businessId, planId }) {
   if (existing >= 2) return;
 
   const subInsert = db.prepare(
-    `INSERT INTO subscriptions (business_id, plan_id, amount, status, paid_at, updated_at)
-     VALUES (?, ?, ?, 'paid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    `INSERT INTO subscriptions
+     (business_id, plan_id, amount, status, current_period_start, current_period_end, paid_at, updated_at)
+     VALUES (?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, datetime('now', '+30 days'), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
   );
   const saleInsert = db.prepare(
     `INSERT INTO affiliate_sales
@@ -252,11 +264,29 @@ function createSeedData() {
   });
 
   const affiliate = ensureAffiliate(affiliateUser.id, "AFI25DEMO");
-  const plan = ensurePlan("Basico", 12999);
-  ensurePlan("Premium", 16999);
-  ensurePlan("Elite", 21999);
+  const plan = ensurePlan({
+    code: "BASIC",
+    displayName: "Basico",
+    priceArs: 12999,
+    maxProducts: 10,
+  });
+  ensurePlan({
+    code: "PREMIUM",
+    displayName: "Premium",
+    priceArs: 16999,
+    maxProducts: 50,
+  });
+  ensurePlan({
+    code: "ELITE",
+    displayName: "Elite",
+    priceArs: 21999,
+    maxProducts: null,
+  });
 
   const business = ensureBusinessForUser(commerceUser.id, affiliate.id);
+  db.prepare(
+    "UPDATE businesses SET has_completed_onboarding = 1, onboarding_step = 'done', plan_id = ? WHERE id = ?"
+  ).run(plan.id, business.id);
   ensureBusinessHours(business.id);
   ensureMenuData(business.id);
   ensureDemoPendingSales({ affiliateId: affiliate.id, businessId: business.id, planId: plan.id });

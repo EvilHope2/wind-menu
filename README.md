@@ -150,10 +150,12 @@ SUPABASE_PULL_INTERVAL_MS=30000
 ## Planes y pagos online
 
 - Comercio: `/app/plans` para elegir plan y pagar.
+- Onboarding comercio: `/onboarding/welcome` -> `/onboarding/plan` -> `/onboarding/checkout`.
+- API onboarding: `POST /api/onboarding/select-plan` y `GET /api/subscription/status`.
 - Admin: `/admin/plans` para crear/editar/activar planes.
 - Admin: `/admin/subscriptions` para ver estado de suscripciones y pasarela.
-- Webhook: `POST /webhooks/mercadopago`.
-- Cuando Mercado Pago confirma `approved`, la suscripcion pasa a `paid` y la venta afiliada se crea en `PENDING`.
+- Webhook: `POST /api/webhooks/mercadopago` (alias legacy: `/webhooks/mercadopago`).
+- Cuando Mercado Pago confirma `approved`, la suscripcion pasa a `ACTIVE`, se completa onboarding y la venta afiliada se crea en `PENDING`.
 
 ## Estructura
 

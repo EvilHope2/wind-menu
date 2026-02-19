@@ -1,0 +1,25 @@
+<%- include("../partials/head", { title }) %>
+<main class="auth-wrap">
+  <section class="auth-card">
+    <article class="auth-side">
+      <div>
+        <p class="pill">Onboarding</p>
+        <h2>Bienvenido, <%= business.business_name %></h2>
+        <p>Armemos tu menu digital profesional y activemos tu cuenta en minutos.</p>
+      </div>
+      <p class="muted">Paso 1 de 2</p>
+    </article>
+    <article class="card">
+      <%- include("../partials/flash") %>
+      <h1>Arranquemos</h1>
+      <p class="muted">Primero elegi un plan para habilitar tu panel de comercio.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/onboarding/plan">Elegir plan</a>
+        <form action="/logout" method="post">
+          <button class="btn btn-ghost" type="submit">Salir</button>
+        </form>
+      </div>
+    </article>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

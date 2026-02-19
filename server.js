@@ -372,15 +372,83 @@ function normalizeMoneyValue(value) {
   return Math.round(numeric * 100) / 100;
 }
 
-async function createMercadoPagoPreference({ subscription, plan, business, user }) {
+function displayPlanName(plan) {
+  return plan.display_name || plan.name || plan.code || "Plan";
+}
+
+function activeSubscriptionForBusiness(businessId) {
+  return db
+    .prepare(
+       `SELECT s.*, p.code AS plan_code, p.display_name AS plan_display_name, p.max_products
+       FROM subscriptions s
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.business_id = ? AND UPPER(COALESCE(s.status, '')) IN ('ACTIVE', 'PAID')
+       ORDER BY COALESCE(s.current_period_end, s.updated_at, s.created_at) DESC, s.id DESC
+       LIMIT 1`
+    )
+    .get(businessId);
+}
+
+function pendingSubscriptionForBusiness(businessId) {
+  return db
+    .prepare(
+       `SELECT s.*, p.code AS plan_code, p.display_name AS plan_display_name, p.max_products
+       FROM subscriptions s
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.business_id = ? AND UPPER(COALESCE(s.status, '')) IN ('PENDING_PAYMENT', 'PENDING')
+       ORDER BY s.updated_at DESC, s.id DESC
+       LIMIT 1`
+    )
+    .get(businessId);
+}
+
+function isSubscriptionPaidLike(status) {
+  const normalized = String(status || "").trim().toUpperCase();
+  return normalized === "PAID" || normalized === "ACTIVE";
+}
+
+function resolveCommerceGate(businessId) {
+  const active = activeSubscriptionForBusiness(businessId);
+  if (active) {
+    return { allowed: true, redirectTo: null, active, pending: null };
+  }
+  const pending = pendingSubscriptionForBusiness(businessId);
+  if (pending) {
+    return { allowed: false, redirectTo: "/onboarding/checkout", active: null, pending };
+  }
+  return { allowed: false, redirectTo: "/onboarding/plan", active: null, pending: null };
+}
+
+function canCreateProductForBusiness(businessId) {
+  const active = activeSubscriptionForBusiness(businessId);
+  const maxProducts = active?.max_products;
+  if (maxProducts === null || maxProducts === undefined) return { allowed: true, maxProducts: null };
+  const limit = Number(maxProducts);
+  if (!Number.isFinite(limit) || limit <= 0) return { allowed: true, maxProducts: null };
+  const total = db.prepare("SELECT COUNT(*) AS total FROM products WHERE business_id = ?").get(businessId).total;
+  return { allowed: Number(total) < limit, maxProducts: limit, total: Number(total) };
+}
+
+function ensureActiveSubscriptionAccess(req, res, next) {
+  if (!req.session?.user || req.session.user.role !== "COMMERCE") return next();
+  const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return flashAndRedirect(req, res, "error", "Comercio no encontrado.", "/logout");
+  const gate = resolveCommerceGate(business.id);
+  if (gate.allowed) return next();
+  return res.redirect(gate.redirectTo);
+}
+
+async function createMercadoPagoPreference({ subscription, plan, business, user, returnBasePath, planCode }) {
   if (!MP_ACCESS_TOKEN) {
     throw new Error("Mercado Pago no esta configurado.");
   }
 
+  const cleanPlanCode = String(planCode || plan.code || "").trim().toUpperCase() || "PLAN";
+  const backBase = returnBasePath || "/app/plans";
   const payload = {
     items: [
       {
-        title: `${plan.name} - ${business.business_name}`,
+        title: `Plan ${displayPlanName(plan)} - ${business.business_name}`,
         quantity: 1,
         currency_id: "ARS",
         unit_price: normalizeMoneyValue(subscription.amount),
@@ -394,13 +462,14 @@ async function createMercadoPagoPreference({ subscription, plan, business, user 
       subscription_id: subscription.id,
       business_id: business.id,
       plan_id: plan.id,
+      plan_code: cleanPlanCode,
     },
     external_reference: subscription.external_reference,
     notification_url: MP_WEBHOOK_URL,
     back_urls: {
-      success: `${BASE_URL}/app/plans?payment=success`,
-      pending: `${BASE_URL}/app/plans?payment=pending`,
-      failure: `${BASE_URL}/app/plans?payment=failure`,
+      success: `${BASE_URL}${backBase}?status=success&sub=${subscription.id}`,
+      pending: `${BASE_URL}${backBase}?status=pending&sub=${subscription.id}`,
+      failure: `${BASE_URL}${backBase}?status=failure&sub=${subscription.id}`,
     },
     auto_return: "approved",
   };
@@ -448,7 +517,7 @@ function ensurePendingAffiliateSaleForSubscription(subscriptionId) {
     )
     .get(subscriptionId);
   if (!subscription) return;
-  if (String(subscription.status).toLowerCase() !== "paid") return;
+  if (!isSubscriptionPaidLike(subscription.status)) return;
   if (!subscription.affiliate_id) return;
 
   const existingSale = db
@@ -478,6 +547,132 @@ function ensurePendingAffiliateSaleForSubscription(subscriptionId) {
     commissionAmount,
     pointsEarned
   );
+}
+
+function plusDaysIso(days) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
+}
+
+function createOrUpdatePendingSubscriptionAndPayment({ business, plan, checkoutUrl, preferenceId }) {
+  const existingPending = pendingSubscriptionForBusiness(business.id);
+  let subscriptionId = existingPending?.id || null;
+
+  if (!subscriptionId) {
+    const result = db
+      .prepare(
+        `INSERT INTO subscriptions
+         (business_id, plan_id, amount, status, payment_provider, created_at, updated_at)
+         VALUES (?, ?, ?, 'PENDING_PAYMENT', 'mercadopago', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      )
+      .run(business.id, plan.id, normalizeMoneyValue(plan.price_ars ?? plan.price));
+    subscriptionId = Number(result.lastInsertRowid);
+  }
+
+  const externalReference = `sub:${subscriptionId}|biz:${business.id}|plan:${String(plan.code || "").toUpperCase()}`;
+
+  db.prepare(
+    `UPDATE subscriptions
+     SET plan_id = ?, amount = ?, status = 'PENDING_PAYMENT', payment_provider = 'mercadopago',
+         provider_preference_id = ?, external_reference = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(
+    plan.id,
+    normalizeMoneyValue(plan.price_ars ?? plan.price),
+    preferenceId || null,
+    externalReference,
+    subscriptionId
+  );
+
+  const pendingPayment = db
+    .prepare(
+      `SELECT * FROM payments
+       WHERE subscription_id = ? AND status = 'pending'
+       ORDER BY id DESC
+       LIMIT 1`
+    )
+    .get(subscriptionId);
+
+  if (pendingPayment) {
+    db.prepare(
+      `UPDATE payments
+       SET provider_preference_id = ?, amount = ?, currency = ?, checkout_url = ?, created_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(
+      preferenceId || pendingPayment.provider_preference_id || null,
+      normalizeMoneyValue(plan.price_ars ?? plan.price),
+      plan.currency || "ARS",
+      checkoutUrl || pendingPayment.checkout_url || null,
+      pendingPayment.id
+    );
+  } else {
+    db.prepare(
+      `INSERT INTO payments
+       (subscription_id, provider, provider_preference_id, amount, currency, status, checkout_url, created_at)
+       VALUES (?, 'mercadopago', ?, ?, ?, 'pending', ?, CURRENT_TIMESTAMP)`
+    ).run(
+      subscriptionId,
+      preferenceId || null,
+      normalizeMoneyValue(plan.price_ars ?? plan.price),
+      plan.currency || "ARS",
+      checkoutUrl || null
+    );
+  }
+
+  db.prepare(
+    `UPDATE businesses
+     SET onboarding_step = 'checkout', has_completed_onboarding = 0, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(business.id);
+
+  return { subscriptionId, externalReference };
+}
+
+function activateSubscriptionFromPayment(subscriptionId, paymentInfo) {
+  const subscription = db.prepare("SELECT * FROM subscriptions WHERE id = ?").get(subscriptionId);
+  if (!subscription) return false;
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `UPDATE subscriptions
+       SET status = 'ACTIVE', provider_payment_id = ?, last_provider_status = ?, amount = ?,
+           paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP),
+           current_period_start = COALESCE(current_period_start, CURRENT_TIMESTAMP),
+           current_period_end = COALESCE(current_period_end, ?),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(
+      String(paymentInfo.paymentId || ""),
+      String(paymentInfo.providerStatus || "approved"),
+      normalizeMoneyValue(paymentInfo.amount || subscription.amount),
+      plusDaysIso(30),
+      subscriptionId
+    );
+
+    db.prepare(
+      `UPDATE payments
+       SET provider_payment_id = ?, merchant_order_id = ?, status = 'paid',
+           paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP)
+       WHERE subscription_id = ?`
+    ).run(
+      String(paymentInfo.paymentId || ""),
+      paymentInfo.merchantOrderId ? String(paymentInfo.merchantOrderId) : null,
+      subscriptionId
+    );
+
+    db.prepare(
+      `UPDATE businesses
+       SET has_completed_onboarding = 1,
+           onboarding_step = 'done',
+           plan_id = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(subscription.plan_id, subscription.business_id);
+  });
+  tx();
+  ensurePendingAffiliateSaleForSubscription(subscriptionId);
+  return true;
 }
 
 function approveAffiliateSale(saleId, adminId, note) {
@@ -647,8 +842,9 @@ app.post("/register", (req, res) => {
   );
 
   db.prepare(
-    `INSERT INTO businesses (user_id, business_name, slug, whatsapp, affiliate_id, referred_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO businesses
+     (user_id, business_name, slug, whatsapp, affiliate_id, referred_at, has_completed_onboarding, onboarding_step)
+     VALUES (?, ?, ?, ?, ?, ?, 0, 'welcome')`
   ).run(userResult.lastInsertRowid, business_name.trim(), slug, whatsapp.trim(), affiliateId, referredAt);
 
   req.session.user = {
@@ -660,11 +856,19 @@ app.post("/register", (req, res) => {
 
   clearCookie(res, "windi_ref_code");
 
-  return flashAndRedirect(req, res, "success", "Cuenta creada correctamente.", "/app");
+  return flashAndRedirect(req, res, "success", "Cuenta creada correctamente.", "/onboarding/welcome");
 });
 
 app.get("/login", (req, res) => {
-  if (req.session.user) return res.redirect("/app");
+  if (req.session.user) {
+    const role = req.session.user.role || "COMMERCE";
+    if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
+    if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
+    const business = getBusinessByUserId(req.session.user.id);
+    if (!business) return res.redirect("/register");
+    const gate = resolveCommerceGate(business.id);
+    return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
+  }
   res.render("auth-login", { title: "Iniciar sesion | Windi Menu" });
 });
 
@@ -681,8 +885,17 @@ app.post("/login", (req, res) => {
   req.session.user = { id: user.id, fullName: user.full_name, email: user.email, role };
 
   let target = "/app";
-  if (role === "AFFILIATE") target = "/affiliate/dashboard";
-  if (role === "ADMIN") target = "/admin/affiliate-sales";
+  if (role === "AFFILIATE") {
+    target = "/affiliate/dashboard";
+  } else if (role === "ADMIN") {
+    target = "/admin/affiliate-sales";
+  } else {
+    const business = getBusinessByUserId(user.id);
+    if (business) {
+      const gate = resolveCommerceGate(business.id);
+      target = gate.allowed ? "/app" : gate.redirectTo;
+    }
+  }
   return flashAndRedirect(req, res, "success", "Sesion iniciada.", target);
 });
 
@@ -695,56 +908,291 @@ app.get("/forgot-password", (_req, res) => {
   res.render("auth-forgot", { title: "Recuperar clave | Windi Menu" });
 });
 
-app.post("/webhooks/mercadopago", async (req, res) => {
+app.get("/support", (_req, res) => {
+  res.status(200).send("Soporte Windi Menu: hola@windimenu.com");
+});
+
+app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
+  const business = getBusinessByUserId(req.session.user.id);
+  const gate = resolveCommerceGate(business.id);
+  if (gate.allowed) return res.redirect("/app");
+  res.render("onboarding/welcome", {
+    title: "Bienvenido | Windi Menu",
+    business,
+  });
+});
+
+app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
+  const business = getBusinessByUserId(req.session.user.id);
+  const gate = resolveCommerceGate(business.id);
+  if (gate.allowed) return res.redirect("/app");
+
+  const plans = db
+    .prepare(
+      `SELECT id, code, display_name, price_ars, currency, max_products
+       FROM plans
+       WHERE is_active = 1
+       ORDER BY price_ars ASC, id ASC`
+    )
+    .all();
+
+  res.render("onboarding/plan", {
+    title: "Elegi tu plan | Windi Menu",
+    business,
+    plans,
+    mercadopagoReady: Boolean(MP_ACCESS_TOKEN),
+  });
+});
+
+app.get("/onboarding/checkout", requireRole("COMMERCE"), (req, res) => {
+  const business = getBusinessByUserId(req.session.user.id);
+  const gate = resolveCommerceGate(business.id);
+  if (gate.allowed) return res.redirect("/app");
+
+  const pending = gate.pending || pendingSubscriptionForBusiness(business.id);
+  if (!pending) return res.redirect("/onboarding/plan");
+
+  const payment = db
+    .prepare(
+      `SELECT *
+       FROM payments
+       WHERE subscription_id = ?
+       ORDER BY id DESC
+       LIMIT 1`
+    )
+    .get(pending.id);
+  const plan = db.prepare("SELECT * FROM plans WHERE id = ?").get(pending.plan_id);
+  const status = String(req.query.status || payment?.status || "pending").trim().toLowerCase();
+
+  res.render("onboarding/checkout", {
+    title: "Checkout | Windi Menu",
+    business,
+    subscription: pending,
+    plan,
+    payment,
+    paymentStatus: status,
+    mercadopagoReady: Boolean(MP_ACCESS_TOKEN),
+  });
+});
+
+app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res) => {
+  try {
+    const business = getBusinessByUserId(req.session.user.id);
+    const gate = resolveCommerceGate(business.id);
+    if (gate.allowed) {
+      return res.json({ ok: true, already_active: true, redirect_to: "/app" });
+    }
+    const user = db.prepare("SELECT id, email, full_name FROM users WHERE id = ?").get(req.session.user.id);
+    const planCode = String(req.body.plan_code || "").trim().toUpperCase();
+    const plan = db
+      .prepare("SELECT * FROM plans WHERE code = ? AND is_active = 1 LIMIT 1")
+      .get(planCode);
+    if (!plan) return res.status(400).json({ ok: false, message: "Plan invalido." });
+    if (!MP_ACCESS_TOKEN) return res.status(503).json({ ok: false, message: "Pasarela no configurada." });
+
+    const currentPending = pendingSubscriptionForBusiness(business.id);
+    if (currentPending) {
+      const existingPayment = db
+        .prepare(
+          `SELECT * FROM payments
+           WHERE subscription_id = ? AND status = 'pending' AND checkout_url IS NOT NULL
+           ORDER BY id DESC
+           LIMIT 1`
+        )
+        .get(currentPending.id);
+      if (existingPayment && currentPending.plan_id === plan.id) {
+        return res.json({ ok: true, checkout_url: existingPayment.checkout_url, subscription_id: currentPending.id });
+      }
+    }
+
+    let seedSubscription = currentPending;
+    if (!seedSubscription) {
+      const created = db
+        .prepare(
+          `INSERT INTO subscriptions
+           (business_id, plan_id, amount, status, payment_provider, created_at, updated_at)
+           VALUES (?, ?, ?, 'PENDING_PAYMENT', 'mercadopago', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        )
+        .run(business.id, plan.id, normalizeMoneyValue(plan.price_ars ?? plan.price));
+      seedSubscription = { id: Number(created.lastInsertRowid), amount: normalizeMoneyValue(plan.price_ars ?? plan.price) };
+    }
+
+    const externalReference = `sub:${seedSubscription.id}|biz:${business.id}|plan:${planCode}`;
+    const preference = await createMercadoPagoPreference({
+      subscription: {
+        id: seedSubscription.id,
+        amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
+        external_reference: externalReference,
+      },
+      plan,
+      business,
+      user,
+      returnBasePath: "/onboarding/checkout",
+      planCode,
+    });
+
+    const checkoutUrl = preference.init_point || preference.sandbox_init_point;
+    if (!checkoutUrl) {
+      return res.status(502).json({ ok: false, message: "Mercado Pago no devolvio checkout_url." });
+    }
+
+    const updated = createOrUpdatePendingSubscriptionAndPayment({
+      business,
+      plan,
+      checkoutUrl,
+      preferenceId: String(preference.id || ""),
+    });
+
+    return res.json({ ok: true, checkout_url: checkoutUrl, subscription_id: updated.subscriptionId });
+  } catch (error) {
+    console.error("Select plan/onboarding fallo:", error.message);
+    return res.status(500).json({ ok: false, message: "No se pudo iniciar el checkout." });
+  }
+});
+
+app.get("/api/subscription/status", requireRole("COMMERCE"), (req, res) => {
+  const business = getBusinessByUserId(req.session.user.id);
+  const active = activeSubscriptionForBusiness(business.id);
+  const pending = pendingSubscriptionForBusiness(business.id);
+  const subscriptionId = Number(req.query.sub || pending?.id || active?.id || 0);
+  if (!subscriptionId) {
+    return res.json({ ok: true, status: "NONE", active: false });
+  }
+  const subscription = db
+    .prepare("SELECT id, status, current_period_start, current_period_end FROM subscriptions WHERE id = ? AND business_id = ?")
+    .get(subscriptionId, business.id);
+  if (!subscription) return res.status(404).json({ ok: false, message: "Suscripcion no encontrada." });
+  return res.json({
+    ok: true,
+    status: String(subscription.status || "").toUpperCase(),
+    active: ["ACTIVE", "PAID"].includes(String(subscription.status || "").toUpperCase()),
+    subscription,
+  });
+});
+
+async function processMercadoPagoWebhook(req, res) {
   try {
     const queryPaymentId = req.query["data.id"] || req.query.id;
     const bodyPaymentId = req.body?.data?.id || req.body?.id;
     const paymentId = String(queryPaymentId || bodyPaymentId || "").trim();
     if (!paymentId) return res.status(200).json({ ok: true, ignored: true });
 
+    const alreadyProcessed = db
+      .prepare("SELECT id FROM payments WHERE provider_payment_id = ? AND status = 'paid' LIMIT 1")
+      .get(paymentId);
+    if (alreadyProcessed) return res.status(200).json({ ok: true, duplicate: true });
+
     const payment = await getMercadoPagoPayment(paymentId);
     const externalReference = String(payment.external_reference || "").trim();
     const providerStatus = String(payment.status || "").trim().toLowerCase();
     const amount = normalizeMoneyValue(payment.transaction_amount || 0);
+    const merchantOrderId = payment.order?.id || null;
 
     let subscription = null;
-    if (externalReference) {
+    if (payment.metadata?.subscription_id) {
+      subscription = db.prepare("SELECT * FROM subscriptions WHERE id = ?").get(Number(payment.metadata.subscription_id));
+    }
+    if (!subscription && externalReference) {
       subscription = db
         .prepare("SELECT * FROM subscriptions WHERE external_reference = ? ORDER BY id DESC LIMIT 1")
         .get(externalReference);
-    }
-    if (!subscription && payment.metadata?.subscription_id) {
-      subscription = db
-        .prepare("SELECT * FROM subscriptions WHERE id = ?")
-        .get(Number(payment.metadata.subscription_id));
     }
     if (!subscription) {
       return res.status(200).json({ ok: true, ignored: true });
     }
 
-    const paidAlready = String(subscription.status || "").toLowerCase() === "paid";
-    let nextStatus = "pending";
-    if (providerStatus === "approved") nextStatus = "paid";
-    else if (["rejected", "cancelled", "refunded", "charged_back"].includes(providerStatus)) nextStatus = providerStatus;
-    else if (providerStatus) nextStatus = "pending";
+    const normalizedSubStatus =
+      providerStatus === "approved"
+        ? "ACTIVE"
+        : providerStatus === "pending"
+          ? "PENDING_PAYMENT"
+          : ["rejected", "cancelled"].includes(providerStatus)
+            ? "CANCELED"
+            : ["refunded", "charged_back"].includes(providerStatus)
+              ? "EXPIRED"
+              : "PENDING_PAYMENT";
+    const normalizedPayStatus =
+      providerStatus === "approved"
+        ? "paid"
+        : providerStatus === "pending"
+          ? "pending"
+          : ["rejected", "cancelled"].includes(providerStatus)
+            ? "failed"
+            : ["refunded", "charged_back"].includes(providerStatus)
+              ? "refunded"
+              : "pending";
 
     db.prepare(
       `UPDATE subscriptions
-       SET status = ?, provider_payment_id = ?, last_provider_status = ?, amount = ?,
-           paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END,
-           updated_at = CURRENT_TIMESTAMP
+       SET status = ?, provider_payment_id = ?, last_provider_status = ?, amount = ?, updated_at = CURRENT_TIMESTAMP,
+           paid_at = CASE WHEN ? = 'ACTIVE' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END
        WHERE id = ?`
     ).run(
-      nextStatus,
-      String(payment.id || paymentId),
+      normalizedSubStatus,
+      paymentId,
       providerStatus || null,
       amount > 0 ? amount : normalizeMoneyValue(subscription.amount),
-      nextStatus,
+      normalizedSubStatus,
       subscription.id
     );
 
-    if (!paidAlready && nextStatus === "paid") {
-      ensurePendingAffiliateSaleForSubscription(subscription.id);
+    const existingPayment = db
+      .prepare("SELECT * FROM payments WHERE subscription_id = ? ORDER BY id DESC LIMIT 1")
+      .get(subscription.id);
+    if (existingPayment) {
+      db.prepare(
+        `UPDATE payments
+         SET provider_payment_id = ?, merchant_order_id = ?, amount = ?, status = ?, paid_at = ?,
+             currency = COALESCE(currency, 'ARS')
+         WHERE id = ?`
+      ).run(
+        paymentId,
+        merchantOrderId ? String(merchantOrderId) : null,
+        amount > 0 ? amount : normalizeMoneyValue(existingPayment.amount),
+        normalizedPayStatus,
+        normalizedPayStatus === "paid" ? new Date().toISOString() : existingPayment.paid_at || null,
+        existingPayment.id
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO payments
+         (subscription_id, provider, provider_payment_id, merchant_order_id, amount, currency, status, paid_at, created_at)
+         VALUES (?, 'mercadopago', ?, ?, ?, 'ARS', ?, ?, CURRENT_TIMESTAMP)`
+      ).run(
+        subscription.id,
+        paymentId,
+        merchantOrderId ? String(merchantOrderId) : null,
+        amount > 0 ? amount : normalizeMoneyValue(subscription.amount),
+        normalizedPayStatus,
+        normalizedPayStatus === "paid" ? new Date().toISOString() : null
+      );
+    }
+
+    if (normalizedPayStatus === "paid") {
+      activateSubscriptionFromPayment(subscription.id, {
+        paymentId,
+        providerStatus,
+        amount,
+        merchantOrderId,
+      });
+    } else if (normalizedPayStatus === "refunded") {
+      const sale = db
+        .prepare(
+          `SELECT id
+           FROM affiliate_sales
+           WHERE subscription_id = ? AND status IN ('APPROVED', 'PAID')
+           ORDER BY id DESC
+           LIMIT 1`
+        )
+        .get(subscription.id);
+      if (sale) {
+        reverseAffiliateSale(sale.id, null, "Reversa automatica por contracargo/refund de Mercado Pago");
+      }
+      db.prepare(
+        `UPDATE businesses
+         SET has_completed_onboarding = 0, onboarding_step = 'plan', updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      ).run(subscription.business_id);
     }
 
     return res.status(200).json({ ok: true });
@@ -752,9 +1200,17 @@ app.post("/webhooks/mercadopago", async (req, res) => {
     console.error("Webhook Mercado Pago fallo:", error.message);
     return res.status(200).json({ ok: true });
   }
-});
+}
 
-app.use("/app", requireRole("COMMERCE"));
+app.post("/api/webhooks/mercadopago", processMercadoPagoWebhook);
+app.post("/webhooks/mercadopago", processMercadoPagoWebhook);
+
+app.use("/app", requireRole("COMMERCE"), ensureActiveSubscriptionAccess);
+app.use("/panel", requireRole("COMMERCE"), ensureActiveSubscriptionAccess);
+
+app.get("/panel", (_req, res) => res.redirect("/app"));
+app.get("/panel/dashboard", (_req, res) => res.redirect("/app"));
+app.get("/panel/:section", (req, res) => res.redirect(`/app/${req.params.section}`));
 
 app.get("/app", requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
@@ -782,15 +1238,20 @@ app.get("/app", requireAuth, (req, res) => {
   });
 });
 
-app.get("/app/plans", requireAuth, (req, res) => {
+app.get(["/app/plans", "/billing"], requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
   const plans = db
-    .prepare("SELECT id, name, price, is_active FROM plans WHERE is_active = 1 ORDER BY price ASC, id ASC")
+    .prepare(
+      `SELECT id, code, display_name, name, price_ars, price, max_products, currency, is_active
+       FROM plans
+       WHERE is_active = 1
+       ORDER BY price_ars ASC, id ASC`
+    )
     .all();
 
   const subscriptions = db
     .prepare(
-      `SELECT s.*, p.name AS plan_name
+      `SELECT s.*, p.display_name AS plan_name, p.code AS plan_code
        FROM subscriptions s
        JOIN plans p ON p.id = s.plan_id
        WHERE s.business_id = ?
@@ -799,16 +1260,7 @@ app.get("/app/plans", requireAuth, (req, res) => {
     )
     .all(business.id);
 
-  const currentPaid = db
-    .prepare(
-      `SELECT s.*, p.name AS plan_name
-       FROM subscriptions s
-       JOIN plans p ON p.id = s.plan_id
-       WHERE s.business_id = ? AND LOWER(s.status) = 'paid'
-       ORDER BY COALESCE(s.paid_at, s.created_at) DESC
-       LIMIT 1`
-    )
-    .get(business.id);
+  const currentPaid = activeSubscriptionForBusiness(business.id);
 
   res.render("app/plans", {
     title: "Planes y facturacion | Windi Menu",
@@ -816,7 +1268,7 @@ app.get("/app/plans", requireAuth, (req, res) => {
     plans,
     subscriptions,
     currentPaid,
-    paymentState: String(req.query.payment || "").trim().toLowerCase(),
+    paymentState: String(req.query.status || req.query.payment || "").trim().toLowerCase(),
     activePage: "plans",
     mercadopagoReady: Boolean(MP_ACCESS_TOKEN),
   });
@@ -842,46 +1294,32 @@ app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
     );
   }
 
-  const amount = normalizeMoneyValue(plan.price);
-  const result = db
-    .prepare(
-      `INSERT INTO subscriptions
-       (business_id, plan_id, amount, status, payment_provider, created_at, updated_at)
-       VALUES (?, ?, ?, 'pending', 'mercadopago', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    )
-    .run(business.id, plan.id, amount);
-
-  const subscriptionId = Number(result.lastInsertRowid);
-  const externalReference = `SUB-${subscriptionId}-BIZ-${business.id}`;
-  db.prepare("UPDATE subscriptions SET external_reference = ? WHERE id = ?").run(externalReference, subscriptionId);
-
   try {
+    const draft = pendingSubscriptionForBusiness(business.id) || { id: Date.now(), amount: normalizeMoneyValue(plan.price_ars ?? plan.price) };
+    const externalReference = `sub:${draft.id}|biz:${business.id}|plan:${String(plan.code || "").toUpperCase()}`;
     const preference = await createMercadoPagoPreference({
-      subscription: { id: subscriptionId, amount, external_reference: externalReference },
+      subscription: { id: draft.id, amount: normalizeMoneyValue(plan.price_ars ?? plan.price), external_reference: externalReference },
       plan,
       business,
       user,
+      returnBasePath: "/app/plans",
+      planCode: plan.code,
     });
-
-    db.prepare(
-      `UPDATE subscriptions
-       SET provider_preference_id = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`
-    ).run(String(preference.id || ""), subscriptionId);
 
     const checkoutUrl = preference.init_point || preference.sandbox_init_point;
     if (!checkoutUrl) {
       throw new Error("Mercado Pago no devolvio URL de checkout.");
     }
+    createOrUpdatePendingSubscriptionAndPayment({
+      business,
+      plan,
+      checkoutUrl,
+      preferenceId: String(preference.id || ""),
+    });
 
     return res.redirect(checkoutUrl);
   } catch (error) {
     console.error("Error creando checkout Mercado Pago:", error.message);
-    db.prepare(
-      `UPDATE subscriptions
-       SET status = 'failed', last_provider_status = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`
-    ).run(error.message.slice(0, 255), subscriptionId);
     return flashAndRedirect(req, res, "error", "No se pudo iniciar el pago. Intenta nuevamente.", "/app/plans");
   }
 });
@@ -1296,6 +1734,16 @@ app.get("/app/products/new", requireAuth, (req, res) => {
 
 app.post("/app/products", requireAuth, upload.single("image_file"), (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  const limitCheck = canCreateProductForBusiness(business.id);
+  if (!limitCheck.allowed) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      `Tu plan permite hasta ${limitCheck.maxProducts} productos. Actualiza tu plan para agregar mas.`,
+      "/billing"
+    );
+  }
   const body = req.body;
   const name = String(body.name || "").trim();
   if (!name) return flashAndRedirect(req, res, "error", "El nombre es obligatorio.", "/app/products/new");
@@ -1420,6 +1868,16 @@ app.post("/app/products/:id/toggle-soldout", requireAuth, (req, res) => {
 
 app.post("/app/products/:id/duplicate", requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.user.id);
+  const limitCheck = canCreateProductForBusiness(business.id);
+  if (!limitCheck.allowed) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      `Tu plan permite hasta ${limitCheck.maxProducts} productos. Actualiza tu plan para agregar mas.`,
+      "/billing"
+    );
+  }
   const productId = Number(req.params.id);
   const product = db
     .prepare("SELECT * FROM products WHERE id = ? AND business_id = ?")
@@ -1829,7 +2287,7 @@ app.post("/admin/affiliate-payouts/generate", requireRole("ADMIN"), (req, res) =
 });
 
 app.get("/admin/plans", requireRole("ADMIN"), (req, res) => {
-  const plans = db.prepare("SELECT * FROM plans ORDER BY price ASC, id ASC").all();
+  const plans = db.prepare("SELECT * FROM plans ORDER BY price_ars ASC, id ASC").all();
   res.render("admin/plans", {
     title: "Planes | Windi Menu",
     plans,
@@ -1837,15 +2295,20 @@ app.get("/admin/plans", requireRole("ADMIN"), (req, res) => {
 });
 
 app.post("/admin/plans", requireRole("ADMIN"), (req, res) => {
-  const name = String(req.body.name || "").trim();
-  const price = normalizeMoneyValue(req.body.price || 0);
-  if (!name) return flashAndRedirect(req, res, "error", "El nombre del plan es obligatorio.", "/admin/plans");
-  if (price <= 0) return flashAndRedirect(req, res, "error", "El precio debe ser mayor a 0.", "/admin/plans");
+  const code = String(req.body.code || "").trim().toUpperCase();
+  const displayName = String(req.body.display_name || "").trim();
+  const priceArs = normalizeMoneyValue(req.body.price_ars || req.body.price || 0);
+  const maxProductsRaw = String(req.body.max_products ?? "").trim();
+  const maxProducts = maxProductsRaw === "" ? null : Math.max(1, Number(maxProductsRaw));
 
-  db.prepare("INSERT INTO plans (name, price, is_active, created_at) VALUES (?, ?, 1, CURRENT_TIMESTAMP)").run(
-    name,
-    price
-  );
+  if (!code) return flashAndRedirect(req, res, "error", "El codigo del plan es obligatorio.", "/admin/plans");
+  if (!displayName) return flashAndRedirect(req, res, "error", "El nombre del plan es obligatorio.", "/admin/plans");
+  if (priceArs <= 0) return flashAndRedirect(req, res, "error", "El precio debe ser mayor a 0.", "/admin/plans");
+
+  db.prepare(
+    `INSERT INTO plans (code, display_name, name, price, price_ars, currency, max_products, is_active, created_at)
+     VALUES (?, ?, ?, ?, ?, 'ARS', ?, 1, CURRENT_TIMESTAMP)`
+  ).run(code, displayName, displayName, priceArs, priceArs, Number.isFinite(maxProducts) ? maxProducts : null);
   return flashAndRedirect(req, res, "success", "Plan creado.", "/admin/plans");
 });
 
@@ -1854,12 +2317,21 @@ app.post("/admin/plans/:id/update", requireRole("ADMIN"), (req, res) => {
   const plan = db.prepare("SELECT * FROM plans WHERE id = ?").get(planId);
   if (!plan) return flashAndRedirect(req, res, "error", "Plan no encontrado.", "/admin/plans");
 
-  const name = String(req.body.name || "").trim();
-  const price = normalizeMoneyValue(req.body.price || 0);
-  if (!name) return flashAndRedirect(req, res, "error", "El nombre del plan es obligatorio.", "/admin/plans");
-  if (price <= 0) return flashAndRedirect(req, res, "error", "El precio debe ser mayor a 0.", "/admin/plans");
+  const code = String(req.body.code || "").trim().toUpperCase();
+  const displayName = String(req.body.display_name || "").trim();
+  const priceArs = normalizeMoneyValue(req.body.price_ars || req.body.price || 0);
+  const maxProductsRaw = String(req.body.max_products ?? "").trim();
+  const maxProducts = maxProductsRaw === "" ? null : Math.max(1, Number(maxProductsRaw));
 
-  db.prepare("UPDATE plans SET name = ?, price = ? WHERE id = ?").run(name, price, planId);
+  if (!code) return flashAndRedirect(req, res, "error", "El codigo del plan es obligatorio.", "/admin/plans");
+  if (!displayName) return flashAndRedirect(req, res, "error", "El nombre del plan es obligatorio.", "/admin/plans");
+  if (priceArs <= 0) return flashAndRedirect(req, res, "error", "El precio debe ser mayor a 0.", "/admin/plans");
+
+  db.prepare(
+    `UPDATE plans
+     SET code = ?, display_name = ?, name = ?, price = ?, price_ars = ?, currency = 'ARS', max_products = ?
+     WHERE id = ?`
+  ).run(code, displayName, displayName, priceArs, priceArs, Number.isFinite(maxProducts) ? maxProducts : null, planId);
   return flashAndRedirect(req, res, "success", "Plan actualizado.", "/admin/plans");
 });
 
@@ -1873,10 +2345,12 @@ app.post("/admin/plans/:id/toggle-active", requireRole("ADMIN"), (req, res) => {
 
 app.get("/admin/subscriptions", requireRole("ADMIN"), (req, res) => {
   const businesses = db.prepare("SELECT id, business_name FROM businesses ORDER BY business_name").all();
-  const plans = db.prepare("SELECT id, name, price FROM plans WHERE is_active = 1 ORDER BY price ASC").all();
+  const plans = db
+    .prepare("SELECT id, display_name AS name, price_ars AS price FROM plans WHERE is_active = 1 ORDER BY price_ars ASC")
+    .all();
   const subscriptions = db
     .prepare(
-      `SELECT s.*, b.business_name, p.name AS plan_name
+      `SELECT s.*, b.business_name, p.display_name AS plan_name
        FROM subscriptions s
        JOIN businesses b ON b.id = s.business_id
        JOIN plans p ON p.id = s.plan_id
@@ -1907,10 +2381,16 @@ app.post("/admin/subscriptions/create-paid", requireRole("ADMIN"), (req, res) =>
   const subscriptionId = db
     .prepare(
       `INSERT INTO subscriptions
-       (business_id, plan_id, amount, status, paid_at, updated_at)
-       VALUES (?, ?, ?, 'paid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+       (business_id, plan_id, amount, status, current_period_start, current_period_end, paid_at, updated_at)
+       VALUES (?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
     )
-    .run(businessId, planId, amount || plan.price).lastInsertRowid;
+    .run(businessId, planId, amount || normalizeMoneyValue(plan.price_ars ?? plan.price), plusDaysIso(30)).lastInsertRowid;
+
+  db.prepare(
+    `UPDATE businesses
+     SET plan_id = ?, has_completed_onboarding = 1, onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(planId, businessId);
 
   ensurePendingAffiliateSaleForSubscription(subscriptionId);
   return flashAndRedirect(req, res, "success", "Suscripcion pagada registrada.", "/admin/subscriptions");
@@ -1923,8 +2403,13 @@ app.post("/admin/subscriptions/:id/mark-paid", requireRole("ADMIN"), (req, res) 
     return flashAndRedirect(req, res, "error", "Suscripcion no encontrada.", "/admin/subscriptions");
   }
   db.prepare(
-    "UPDATE subscriptions SET status = 'paid', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-  ).run(subscriptionId);
+    "UPDATE subscriptions SET status = 'ACTIVE', paid_at = CURRENT_TIMESTAMP, current_period_start = COALESCE(current_period_start, CURRENT_TIMESTAMP), current_period_end = COALESCE(current_period_end, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  ).run(plusDaysIso(30), subscriptionId);
+  db.prepare(
+    `UPDATE businesses
+     SET plan_id = ?, has_completed_onboarding = 1, onboarding_step = 'done', updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(subscription.plan_id, subscription.business_id);
   ensurePendingAffiliateSaleForSubscription(subscriptionId);
   return flashAndRedirect(req, res, "success", "Suscripcion marcada como pagada.", "/admin/subscriptions");
 });
@@ -1935,6 +2420,10 @@ app.get("/:slug", (req, res, next) => {
     "app",
     "admin",
     "affiliate",
+    "panel",
+    "billing",
+    "onboarding",
+    "api",
     "login",
     "register",
     "registro",

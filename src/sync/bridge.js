@@ -11,6 +11,7 @@ const TABLES_ORDER = [
   "delivery_zones",
   "business_hours",
   "subscriptions",
+  "payments",
   "affiliate_payouts",
   "affiliate_sales",
 ];

@@ -1,0 +1,78 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <header class="topbar">
+    <a class="logo" href="/onboarding/welcome">Windi Menu | Onboarding</a>
+    <form action="/logout" method="post"><button class="btn btn-ghost" type="submit">Cerrar sesion</button></form>
+  </header>
+
+  <section class="how">
+    <%- include("../partials/flash") %>
+    <h1>Elegi tu plan</h1>
+    <p class="muted">Activa tu panel y publica tu menu con carrito + checkout por WhatsApp.</p>
+    <div class="plan-grid">
+      <% plans.forEach((plan) => { %>
+        <article class="plan <%= String(plan.code).toUpperCase() === 'PREMIUM' ? 'featured' : '' %>">
+          <% if (String(plan.code).toUpperCase() === 'PREMIUM') { %><p class="pill">Recomendado</p><% } %>
+          <h3><%= plan.display_name || plan.name %></h3>
+          <p class="price">$<%= Number(plan.price_ars || plan.price || 0).toLocaleString("es-AR") %></p>
+          <p><strong>Limite productos:</strong>
+            <%= plan.max_products === null || plan.max_products === undefined ? 'Ilimitado' : plan.max_products %>
+          </p>
+          <p>Carrito + WhatsApp + panel autogestionable</p>
+          <button
+            type="button"
+            class="btn btn-primary js-plan-btn"
+            data-plan-code="<%= String(plan.code || '').toUpperCase() %>"
+            <%= mercadopagoReady ? '' : 'disabled' %>>
+            Elegir <%= plan.display_name || plan.name %>
+          </button>
+        </article>
+      <% }) %>
+    </div>
+    <section class="card">
+      <h3>FAQ</h3>
+      <p class="muted">Podes cambiar de plan cuando quieras desde Facturacion.</p>
+      <% if (!mercadopagoReady) { %>
+        <p class="tag">Mercado Pago no esta configurado en el servidor.</p>
+      <% } %>
+      <p id="plan-error" class="muted"></p>
+    </section>
+  </section>
+</main>
+
+<script>
+  const planButtons = document.querySelectorAll(".js-plan-btn");
+  const planError = document.getElementById("plan-error");
+  async function selectPlan(code) {
+    const response = await fetch("/api/onboarding/select-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan_code: code })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (data.redirect_to) {
+      window.location.href = data.redirect_to;
+      return;
+    }
+    if (!response.ok || !data.ok || !data.checkout_url) {
+      if (planError) {
+        planError.textContent = data.message || "No se pudo iniciar el checkout";
+      }
+      return;
+    }
+    window.location.href = data.checkout_url;
+  }
+
+  for (const button of planButtons) {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Preparando checkout...";
+      try {
+        await selectPlan(button.dataset.planCode);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+</script>
+<%- include("../partials/scripts") %>

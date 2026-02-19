@@ -32,9 +32,9 @@
                 <td><span class="tag"><%= s.status %></span></td>
                 <td><%= s.payment_provider || '-' %> <%= s.last_provider_status ? `(${s.last_provider_status})` : '' %></td>
                 <td>
-                  <% if (String(s.status).toLowerCase() !== 'paid') { %>
+                  <% if (String(s.status).toUpperCase() !== 'ACTIVE') { %>
                     <form method="post" action="/admin/subscriptions/<%= s.id %>/mark-paid">
-                      <button class="btn btn-ghost" type="submit">Marcar paid</button>
+                      <button class="btn btn-ghost" type="submit">Marcar ACTIVE</button>
                     </form>
                   <% } %>
                 </td>

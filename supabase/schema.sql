@@ -56,6 +56,9 @@ create table if not exists public.businesses (
   timezone text not null default 'America/Argentina/Ushuaia',
   affiliate_id bigint references public.affiliates(id) on delete set null,
   referred_at timestamptz,
+  plan_id bigint references public.plans(id) on delete set null,
+  has_completed_onboarding boolean not null default false,
+  onboarding_step text not null default 'welcome',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -114,8 +117,13 @@ create table if not exists public.business_hours (
 
 create table if not exists public.plans (
   id bigserial primary key,
+  code text,
+  display_name text,
   name text not null,
   price numeric(12,2) not null default 0,
+  price_ars numeric(12,2),
+  currency text not null default 'ARS',
+  max_products integer,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -126,9 +134,26 @@ create table if not exists public.subscriptions (
   plan_id bigint not null references public.plans(id) on delete restrict,
   amount numeric(12,2) not null,
   status text not null default 'pending',
+  current_period_start timestamptz,
+  current_period_end timestamptz,
   created_at timestamptz not null default now(),
   paid_at timestamptz,
   updated_at timestamptz not null default now()
+);
+
+create table if not exists public.payments (
+  id bigserial primary key,
+  subscription_id bigint not null references public.subscriptions(id) on delete cascade,
+  provider text not null default 'mercadopago',
+  provider_preference_id text,
+  provider_payment_id text,
+  merchant_order_id text,
+  amount numeric(12,2) not null default 0,
+  currency text not null default 'ARS',
+  status text not null default 'pending',
+  checkout_url text,
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
 );
 
 create table if not exists public.affiliate_payouts (
@@ -177,3 +202,14 @@ alter table if exists public.subscriptions add column if not exists provider_pre
 alter table if exists public.subscriptions add column if not exists provider_payment_id text;
 alter table if exists public.subscriptions add column if not exists external_reference text;
 alter table if exists public.subscriptions add column if not exists last_provider_status text;
+alter table if exists public.subscriptions add column if not exists current_period_start timestamptz;
+alter table if exists public.subscriptions add column if not exists current_period_end timestamptz;
+alter table if exists public.plans add column if not exists code text;
+alter table if exists public.plans add column if not exists display_name text;
+alter table if exists public.plans add column if not exists price_ars numeric(12,2);
+alter table if exists public.plans add column if not exists currency text;
+alter table if exists public.plans add column if not exists max_products integer;
+alter table if exists public.businesses add column if not exists plan_id bigint;
+alter table if exists public.businesses add column if not exists has_completed_onboarding boolean default false;
+alter table if exists public.businesses add column if not exists onboarding_step text default 'welcome';
+create unique index if not exists idx_payments_provider_payment_unique on public.payments(provider_payment_id);

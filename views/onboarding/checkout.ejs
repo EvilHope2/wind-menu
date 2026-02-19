@@ -1,0 +1,72 @@
+<%- include("../partials/head", { title }) %>
+<main class="auth-wrap">
+  <section class="auth-card">
+    <article class="auth-side">
+      <div>
+        <p class="pill">Checkout</p>
+        <h2>Plan <%= plan ? (plan.display_name || plan.name) : 'Seleccionado' %></h2>
+        <p>Estado del pago: <strong><%= String(paymentStatus || 'pending').toUpperCase() %></strong></p>
+      </div>
+      <p class="muted">Paso 2 de 2</p>
+    </article>
+    <article class="card">
+      <%- include("../partials/flash") %>
+      <% if (!subscription || !plan) { %>
+        <h1>No hay checkout pendiente</h1>
+        <a class="btn btn-primary" href="/onboarding/plan">Elegir plan</a>
+      <% } else { %>
+        <h1>Completa tu pago</h1>
+        <p class="muted">Tu panel se habilita automaticamente cuando Mercado Pago confirme el pago.</p>
+        <p><strong>Plan:</strong> <%= plan.display_name || plan.name %></p>
+        <p><strong>Monto:</strong> $<%= Number(plan.price_ars || plan.price || subscription.amount || 0).toLocaleString("es-AR") %></p>
+
+        <% if (payment && payment.checkout_url) { %>
+          <a class="btn btn-primary" href="<%= payment.checkout_url %>">
+            <%= payment.status === 'failed' ? 'Reintentar pago' : 'Pagar con Mercado Pago' %>
+          </a>
+        <% } else { %>
+          <a class="btn btn-primary" href="/onboarding/plan">Generar checkout</a>
+        <% } %>
+
+        <button id="refresh-status" class="btn btn-ghost" type="button">Ya pague, actualizar estado</button>
+        <p id="status-hint" class="muted"></p>
+      <% } %>
+    </article>
+  </section>
+</main>
+<script>
+  const refreshBtn = document.getElementById("refresh-status");
+  const statusHint = document.getElementById("status-hint");
+  const subId = "<%= subscription ? subscription.id : '' %>";
+
+  async function checkStatus() {
+    if (!subId) return;
+    const res = await fetch(`/api/subscription/status?sub=${encodeURIComponent(subId)}`);
+    const data = await res.json().catch(() => ({}));
+    if (data.active) {
+      window.location.href = "/app";
+      return;
+    }
+    statusHint.textContent = `Estado actual: ${data.status || "PENDING_PAYMENT"}. Aun no confirmado.`;
+  }
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      statusHint.textContent = "Consultando estado...";
+      try {
+        await checkStatus();
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
+
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      await checkStatus();
+      if (attempts >= 8) clearInterval(timer);
+    }, 5000);
+  }
+</script>
+<%- include("../partials/scripts") %>

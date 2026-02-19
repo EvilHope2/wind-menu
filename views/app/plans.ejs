@@ -49,12 +49,12 @@
           const hasCurrent = Boolean(currentPaid);
           const isCurrent = hasCurrent && Number(currentPaid.plan_id) === Number(plan.id);
           const currentPrice = hasCurrent ? Number(currentPaid.amount || 0) : 0;
-          const targetPrice = Number(plan.price || 0);
+          const targetPrice = Number(plan.price_ars || plan.price || 0);
           const isUpgrade = hasCurrent && !isCurrent && targetPrice > currentPrice;
           const isDowngrade = hasCurrent && !isCurrent && targetPrice < currentPrice;
         %>
         <article class="card">
-          <h2><%= plan.name %></h2>
+          <h2><%= plan.display_name || plan.name %></h2>
           <% if (isCurrent) { %>
             <p class="tag tag-ok">Plan actual</p>
           <% } else if (isUpgrade) { %>
@@ -62,7 +62,8 @@
           <% } else if (isDowngrade) { %>
             <p class="tag">Downgrade</p>
           <% } %>
-          <p class="price">$<%= Number(plan.price).toLocaleString("es-AR") %></p>
+          <p class="price">$<%= targetPrice.toLocaleString("es-AR") %></p>
+          <p class="muted">Max productos: <%= plan.max_products === null || plan.max_products === undefined ? 'Ilimitado' : plan.max_products %></p>
           <form method="post" action="/app/plans/<%= plan.id %>/checkout">
             <button class="btn btn-primary" type="submit" <%= mercadopagoReady ? '' : 'disabled' %>>
               <% if (isCurrent) { %>
@@ -108,6 +109,12 @@
           </table>
         </div>
       <% } %>
+    </section>
+
+    <section class="card">
+      <h2>Cancelar plan</h2>
+      <p class="muted">Accion disponible en proxima version. Por ahora se gestiona por soporte.</p>
+      <button class="btn btn-ghost" type="button" disabled>Cancelar (proximamente)</button>
     </section>
   </section>
 </main>
