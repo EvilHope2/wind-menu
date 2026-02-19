@@ -1,0 +1,52 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head"><h1>Zonas de envio</h1></header>
+
+    <section class="card">
+      <h2>Nueva zona</h2>
+      <form method="post" action="/app/delivery-zones" class="form inline zone-form">
+        <input type="text" name="name" placeholder="Ej: Centro" required />
+        <input type="number" step="0.01" min="0" name="price" placeholder="Precio envio" required />
+        <input type="number" step="0.01" min="0" name="minimum_order_amount" placeholder="Minimo (opc)" />
+        <input type="number" step="0.01" min="0" name="free_delivery_over_amount" placeholder="Gratis desde (opc)" />
+        <input type="number" min="0" name="estimated_time_min" placeholder="Min min" />
+        <input type="number" min="0" name="estimated_time_max" placeholder="Max min" />
+        <input type="number" name="sort_order" placeholder="Orden" value="0" />
+        <label class="checkbox"><input type="checkbox" name="is_active" checked /> Activa</label>
+        <button class="btn btn-primary" type="submit">Agregar</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Listado</h2>
+      <% if (!zones.length) { %>
+        <div class="empty">Todavia no cargaste zonas de envio.</div>
+      <% } %>
+      <% zones.forEach((zone) => { %>
+        <form method="post" action="/app/delivery-zones/<%= zone.id %>/update" class="form inline zone-form">
+          <input type="text" name="name" value="<%= zone.name %>" required />
+          <input type="number" step="0.01" min="0" name="price" value="<%= zone.price %>" required />
+          <input type="number" step="0.01" min="0" name="minimum_order_amount" value="<%= zone.minimum_order_amount ?? '' %>" placeholder="Minimo (opc)" />
+          <input type="number" step="0.01" min="0" name="free_delivery_over_amount" value="<%= zone.free_delivery_over_amount ?? '' %>" placeholder="Gratis desde (opc)" />
+          <input type="number" min="0" name="estimated_time_min" value="<%= zone.estimated_time_min ?? '' %>" placeholder="Min min" />
+          <input type="number" min="0" name="estimated_time_max" value="<%= zone.estimated_time_max ?? '' %>" placeholder="Max min" />
+          <input type="number" name="sort_order" value="<%= zone.sort_order %>" />
+          <label class="checkbox"><input type="checkbox" name="is_active" <%= zone.is_active ? 'checked' : '' %> /> Activa</label>
+          <button class="btn btn-ghost" type="submit">Guardar</button>
+          <button
+            class="btn btn-danger js-confirm"
+            data-confirm="Eliminar esta zona de envio?"
+            formaction="/app/delivery-zones/<%= zone.id %>/delete"
+            type="submit"
+          >
+            Eliminar
+          </button>
+        </form>
+      <% }) %>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

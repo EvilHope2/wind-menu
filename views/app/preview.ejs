@@ -1,0 +1,15 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <header class="page-head">
+      <h1>Vista previa del menu</h1>
+      <a class="btn btn-primary" target="_blank" href="/<%= business.slug %>">Ver publico</a>
+    </header>
+    <p class="muted">Link final: <a class="link" target="_blank" href="/<%= business.slug %>"><%= menuUrl %></a></p>
+    <section class="preview-shell">
+      <%- include("../partials/public-menu-content", { business, grouped, deliveryZones, paymentMethods, openStatus, previewMode: true }) %>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

@@ -1,0 +1,26 @@
+<%- include("partials/head", { title }) %>
+<main class="auth-wrap">
+  <a href="/" class="logo auth-logo"><i data-lucide="arrow-left"></i>Volver</a>
+  <section class="auth-card">
+    <article class="auth-side">
+      <div>
+        <p class="pill"><i data-lucide="shield-check"></i>Acceso seguro</p>
+        <h2>Gestiona tu menu en un solo panel</h2>
+      </div>
+      <p>Controla productos, horarios, delivery, pagos y afiliados desde cualquier dispositivo.</p>
+    </article>
+
+    <section class="card">
+      <h1>Iniciar sesion</h1>
+      <%- include("partials/flash") %>
+      <form method="post" action="/login" class="form">
+        <label>Email<input type="email" name="email" required /></label>
+        <label>Contrasena<input type="password" name="password" required minlength="6" /></label>
+        <button class="btn btn-primary" type="submit"><i data-lucide="log-in"></i>Entrar</button>
+      </form>
+      <p><a class="link" href="/forgot-password">Olvide mi contrasena</a></p>
+      <p class="muted">No tenes cuenta? <a class="link" href="/register">Crear cuenta</a></p>
+    </section>
+  </section>
+</main>
+<%- include("partials/scripts") %>

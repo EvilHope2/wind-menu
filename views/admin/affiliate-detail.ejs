@@ -1,0 +1,55 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/admin-nav") %>
+  <section class="how">
+    <section class="card">
+      <h1><%= affiliate.full_name %></h1>
+      <p class="muted"><%= affiliate.email %> | Ref: <code><%= affiliate.ref_code %></code></p>
+      <p>Ganado: <strong>$<%= Number(affiliate.total_commission_earned || 0).toLocaleString("es-AR") %></strong></p>
+      <p>Pagado: <strong>$<%= Number(affiliate.total_commission_paid || 0).toLocaleString("es-AR") %></strong></p>
+      <p>Puntos confirmados: <strong><%= affiliate.points_confirmed || 0 %></strong></p>
+      <p>Saldo negativo: <strong>$<%= Number(affiliate.negative_balance || 0).toLocaleString("es-AR") %></strong></p>
+    </section>
+
+    <section class="card">
+      <h2>Ventas</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Comision</th><th>Puntos</th><th>Estado</th></tr></thead>
+          <tbody>
+            <% sales.forEach((s) => { %>
+              <tr>
+                <td><%= s.created_at %></td>
+                <td><%= s.business_name || '-' %></td>
+                <td><%= s.plan_name || '-' %></td>
+                <td>$<%= Number(s.commission_amount || 0).toLocaleString("es-AR") %></td>
+                <td><%= s.points_earned %></td>
+                <td><span class="tag"><%= s.status %></span></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Payouts</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Periodo</th><th>Monto</th><th>Metodo</th><th>Fecha</th></tr></thead>
+          <tbody>
+            <% payouts.forEach((p) => { %>
+              <tr>
+                <td><%= p.period_start %> a <%= p.period_end %></td>
+                <td>$<%= Number(p.amount_paid || 0).toLocaleString("es-AR") %></td>
+                <td><%= p.method || '-' %></td>
+                <td><%= p.created_at %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

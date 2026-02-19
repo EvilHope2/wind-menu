@@ -1,0 +1,60 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/affiliate-nav") %>
+  <section class="how">
+    <%- include("../partials/flash") %>
+    <div class="card">
+      <h1>Panel afiliado</h1>
+      <p class="muted">Las comisiones se liquidan semanalmente y requieren aprobacion manual.</p>
+      <p><strong>Link largo:</strong> <code id="affiliate-link-long"><%= baseUrl %>/registro?ref=<%= affiliate.ref_code %></code></p>
+      <p><strong>Link corto:</strong> <code id="affiliate-link-short"><%= baseUrl %>/r/<%= affiliate.ref_code %></code></p>
+      <div class="top-actions">
+        <button class="btn btn-primary" type="button" data-copy-target="affiliate-link-long"><i data-lucide="copy"></i>Copiar link largo</button>
+        <button class="btn btn-ghost" type="button" data-copy-target="affiliate-link-short"><i data-lucide="copy-check"></i>Copiar link corto</button>
+      </div>
+    </div>
+
+    <section class="stats-grid">
+      <article class="stat-card"><h3>Referidos</h3><strong><%= referrals %></strong></article>
+      <article class="stat-card"><h3>Pendiente aprobacion</h3><strong>$<%= Number(pendingApproval).toLocaleString("es-AR") %></strong></article>
+      <article class="stat-card"><h3>Listo para cobrar</h3><strong>$<%= Number(pendingForPayout).toLocaleString("es-AR") %></strong></article>
+      <article class="stat-card"><h3>Comision pagada</h3><strong>$<%= Number(affiliate.total_commission_paid || 0).toLocaleString("es-AR") %></strong></article>
+      <article class="stat-card"><h3>Puntos confirmados</h3><strong><%= affiliate.points_confirmed || 0 %></strong></article>
+    </section>
+
+    <section class="card">
+      <h2>Estados de ventas</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Estado</th><th>Cantidad</th><th>Monto comision</th></tr></thead>
+          <tbody>
+            <% ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'REVERSED'].forEach((status) => { const row = statusMap[status] || { total: 0, amount: 0 }; %>
+              <tr><td><%= status %></td><td><%= row.total %></td><td>$<%= Number(row.amount || 0).toLocaleString("es-AR") %></td></tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Ultimos payouts</h2>
+      <% if (!payouts.length) { %><div class="empty">Todavia no hay payouts.</div><% } %>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Periodo</th><th>Monto</th><th>Metodo</th><th>Fecha</th></tr></thead>
+          <tbody>
+            <% payouts.forEach((p) => { %>
+              <tr>
+                <td><%= p.period_start %> a <%= p.period_end %></td>
+                <td>$<%= Number(p.amount_paid || 0).toLocaleString("es-AR") %></td>
+                <td><%= p.method || '-' %></td>
+                <td><%= p.created_at %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

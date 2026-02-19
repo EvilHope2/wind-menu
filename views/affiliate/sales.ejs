@@ -1,0 +1,40 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/affiliate-nav") %>
+  <section class="how">
+    <div class="card">
+      <form class="form inline" method="get" action="/affiliate/sales">
+        <select name="status">
+          <option value="">Todos</option>
+          <% ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'REVERSED'].forEach((s) => { %>
+            <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>><%= s %></option>
+          <% }) %>
+        </select>
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+      </form>
+    </div>
+    <section class="card">
+      <h1>Ventas</h1>
+      <% if (!sales.length) { %><div class="empty">No hay ventas para este filtro.</div><% } %>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Comision</th><th>Puntos</th><th>Estado</th></tr></thead>
+          <tbody>
+            <% sales.forEach((s) => { %>
+              <tr>
+                <td><%= s.created_at %></td>
+                <td><%= s.business_name || '-' %></td>
+                <td><%= s.plan_name || '-' %></td>
+                <td>$<%= Number(s.amount).toLocaleString("es-AR") %></td>
+                <td>$<%= Number(s.commission_amount).toLocaleString("es-AR") %></td>
+                <td><%= s.points_earned %></td>
+                <td><span class="tag"><%= s.status %></span></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

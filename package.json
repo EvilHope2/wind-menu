@@ -1,0 +1,34 @@
+{
+  "name": "miniweb",
+  "version": "1.0.0",
+  "description": "Windi Menu - SaaS de menus digitales para comercios",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "seed": "node src/seed.js",
+    "supabase:check": "node scripts/check-supabase.js",
+    "supabase:schema": "node scripts/supabase-apply-schema.js",
+    "supabase:sync": "node scripts/sync-sqlite-to-supabase.js",
+    "supabase:pull": "node scripts/sync-supabase-to-sqlite.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.3.1",
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "multer": "^2.0.2",
+    "pg": "^8.18.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}

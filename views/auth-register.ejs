@@ -1,0 +1,36 @@
+<%- include("partials/head", { title }) %>
+<main class="auth-wrap">
+  <a href="/" class="logo auth-logo"><i data-lucide="arrow-left"></i>Volver</a>
+  <section class="auth-card">
+    <article class="auth-side">
+      <div>
+        <p class="pill"><i data-lucide="badge-check"></i>Onboarding rapido</p>
+        <h2>Crea tu menu y empieza a vender hoy</h2>
+      </div>
+      <ul>
+        <li>Link publico personalizado</li>
+        <li>Carrito + envio por zonas</li>
+        <li>Checkout con WhatsApp</li>
+      </ul>
+    </article>
+
+    <section class="card">
+      <h1>Crear cuenta de comercio</h1>
+      <%- include("partials/flash") %>
+      <% if (referral) { %>
+        <p class="pill"><i data-lucide="gift"></i>Invitacion activa: <strong><%= referral.user_name %></strong> (<%= referral.ref_code %>)</p>
+      <% } %>
+      <form method="post" action="/register" class="form">
+        <input type="hidden" name="ref" value="<%= referralCode || '' %>" />
+        <label>Nombre y apellido<input type="text" name="full_name" required /></label>
+        <label>Nombre del comercio<input type="text" name="business_name" required /></label>
+        <label>WhatsApp<input type="text" name="whatsapp" required /></label>
+        <label>Correo<input type="email" name="email" required /></label>
+        <label>Contrasena (min 6)<input type="password" name="password" required minlength="6" /></label>
+        <button class="btn btn-primary" type="submit"><i data-lucide="rocket"></i>Crear mi menu</button>
+      </form>
+      <p class="muted">Ya tenes cuenta? <a class="link" href="/login">Iniciar sesion</a></p>
+    </section>
+  </section>
+</main>
+<%- include("partials/scripts") %>

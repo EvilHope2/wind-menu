@@ -1,0 +1,70 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head">
+      <h1>Productos</h1>
+      <a class="btn btn-primary" href="/app/products/new">Nuevo</a>
+    </header>
+
+    <section class="card">
+      <form method="get" action="/app/products" class="form inline">
+        <input type="text" name="q" value="<%= filters.q %>" placeholder="Buscar por nombre" />
+        <select name="category">
+          <option value="0">Todas las categorias</option>
+          <% categories.forEach((c) => { %>
+            <option value="<%= c.id %>" <%= Number(filters.category) === c.id ? 'selected' : '' %>><%= c.name %></option>
+          <% }) %>
+        </select>
+        <button class="btn btn-ghost" type="submit">Filtrar</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <% if (!products.length) { %>
+        <div class="empty">Todavia no cargaste productos.</div>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Categoria</th>
+                <th>Precio</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% products.forEach((p) => { %>
+                <tr>
+                  <td>
+                    <strong><%= p.name %></strong>
+                    <small><%= p.description || '' %></small>
+                  </td>
+                  <td><%= p.category_name || 'Sin categoria' %></td>
+                  <td>$<%= Number(p.price).toLocaleString('es-AR') %></td>
+                  <td>
+                    <span class="tag <%= p.is_visible ? 'tag-ok' : 'tag-warn' %>"><%= p.is_visible ? 'Visible' : 'Oculto' %></span>
+                    <span class="tag <%= p.is_sold_out ? 'tag-warn' : 'tag-ok' %>"><%= p.is_sold_out ? 'Agotado' : 'Disponible' %></span>
+                  </td>
+                  <td class="actions">
+                    <a class="btn btn-ghost" href="/app/products/<%= p.id %>/edit">Editar</a>
+                    <form method="post" action="/app/products/<%= p.id %>/toggle-visible"><button class="btn btn-ghost" type="submit">Visible</button></form>
+                    <form method="post" action="/app/products/<%= p.id %>/toggle-soldout"><button class="btn btn-ghost" type="submit">Agotado</button></form>
+                    <form method="post" action="/app/products/<%= p.id %>/duplicate"><button class="btn btn-ghost" type="submit">Duplicar</button></form>
+                    <form method="post" action="/app/products/<%= p.id %>/delete">
+                      <button class="btn btn-danger js-confirm" data-confirm="Eliminar este producto?" type="submit">Eliminar</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

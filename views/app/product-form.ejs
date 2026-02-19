@@ -1,0 +1,37 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head"><h1><%= product ? 'Editar producto' : 'Nuevo producto' %></h1></header>
+    <section class="card">
+      <form
+        method="post"
+        action="<%= product ? '/app/products/' + product.id + '/update' : '/app/products' %>"
+        class="form two-col"
+        enctype="multipart/form-data"
+      >
+        <label>Nombre<input type="text" name="name" value="<%= product?.name || '' %>" required /></label>
+        <label>Categoria
+          <select name="category_id">
+            <option value="">Sin categoria</option>
+            <% categories.forEach((c) => { %>
+              <option value="<%= c.id %>" <%= product?.category_id === c.id ? 'selected' : '' %>><%= c.name %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>Precio<input type="number" step="0.01" name="price" value="<%= product?.price || 0 %>" required /></label>
+        <label>Precio anterior<input type="number" step="0.01" name="previous_price" value="<%= product?.previous_price || '' %>" /></label>
+        <label>Orden<input type="number" name="sort_order" value="<%= product?.sort_order || 0 %>" /></label>
+        <label>Imagen URL<input type="text" name="image_url" value="<%= product?.image_url || '' %>" /></label>
+        <label>Subir imagen<input type="file" name="image_file" accept="image/*" /></label>
+        <label>Descripcion<textarea name="description"><%= product?.description || '' %></textarea></label>
+        <label class="checkbox"><input type="checkbox" name="is_featured" <%= product?.is_featured ? 'checked' : '' %> /> Destacado (promo)</label>
+        <label class="checkbox"><input type="checkbox" name="is_sold_out" <%= product?.is_sold_out ? 'checked' : '' %> /> Agotado</label>
+        <label class="checkbox"><input type="checkbox" name="is_visible" <%= product ? (product?.is_visible ? 'checked' : '') : 'checked' %> /> Visible</label>
+        <button class="btn btn-primary" type="submit">Guardar producto</button>
+      </form>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

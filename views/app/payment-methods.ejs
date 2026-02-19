@@ -1,0 +1,48 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head">
+      <h1>Metodos de pago</h1>
+      <p class="muted">Activa o desactiva lo que vera el cliente en el carrito publico.</p>
+    </header>
+
+    <section class="card">
+      <form method="post" action="/app/payment-methods" class="form">
+        <label class="checkbox">
+          <input type="checkbox" name="payment_card_enabled" <%= business.payment_card_enabled ? 'checked' : '' %> />
+          Tarjeta
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="payment_transfer_enabled" <%= business.payment_transfer_enabled ? 'checked' : '' %> />
+          Transferencia
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="payment_cash_enabled" <%= business.payment_cash_enabled ? 'checked' : '' %> />
+          Efectivo
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="cash_allow_change" <%= business.cash_allow_change ? 'checked' : '' %> />
+          Permitir "Con cuanto pagas" (vuelto)
+        </label>
+
+        <label>Alias transferencia
+          <input type="text" name="transfer_alias" placeholder="ej: pizzeria9420.mp" value="<%= business.transfer_alias || '' %>" />
+        </label>
+        <label>CVU transferencia
+          <input type="text" name="transfer_cvu" placeholder="22 digitos" value="<%= business.transfer_cvu || '' %>" />
+        </label>
+        <label>Titular transferencia (opcional)
+          <input type="text" name="transfer_account_holder" value="<%= business.transfer_account_holder || '' %>" />
+        </label>
+        <label>Texto para transferencia (opcional)
+          <textarea name="transfer_instructions" placeholder="Alias o CVU para enviar al cliente"><%= business.transfer_instructions || '' %></textarea>
+        </label>
+
+        <button class="btn btn-primary" type="submit">Guardar metodos</button>
+      </form>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

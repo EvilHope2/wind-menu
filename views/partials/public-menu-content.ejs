@@ -1,0 +1,164 @@
+<section
+  class="public-menu"
+  data-public-menu
+  data-business-slug="<%= business.slug %>"
+  data-business-name="<%= business.business_name %>"
+  data-business-whatsapp="<%= (business.whatsapp || '').replace(/[^0-9]/g, '') %>"
+  data-delivery-enabled="<%= business.delivery_enabled ? '1' : '0' %>"
+  data-pickup-enabled="<%= business.pickup_enabled ? '1' : '0' %>"
+  data-minimum-order-amount="<%= Number(business.minimum_order_amount || 0) %>"
+  data-free-delivery-over="<%= Number(business.free_delivery_over_amount || 0) %>"
+  data-cash-allow-change="<%= business.cash_allow_change ? '1' : '0' %>"
+  data-delivery-zones='<%- JSON.stringify(deliveryZones || []) %>'
+  data-payment-methods='<%- JSON.stringify(paymentMethods || { cash: true, transfer: true, card: true }) %>'
+  data-transfer-config='<%- JSON.stringify({ alias: business.transfer_alias || "", cvu: business.transfer_cvu || "", holder: business.transfer_account_holder || "", note: business.transfer_instructions || "" }) %>'
+  data-open-status='<%- JSON.stringify(openStatus || { canOrder: true, state: "open", label: "Abierto ahora", message: "" }) %>'
+>
+  <header
+    class="menu-hero"
+    style="<%= business.cover_url ? `background-image:url('${business.cover_url}')` : '' %>"
+  >
+    <div class="hero-overlay"></div>
+    <div class="menu-head-content">
+      <% if (business.logo_url) { %><img class="menu-logo" src="<%= business.logo_url %>" alt="Logo" /><% } %>
+      <h1><%= business.business_name %></h1>
+      <p><%= business.hours || 'Horarios no cargados' %></p>
+      <% if (openStatus) { %>
+        <p class="status-pill status-<%= openStatus.state %>"><%= openStatus.label %></p>
+        <% if (openStatus.message) { %><p class="status-message"><%= openStatus.message %></p><% } %>
+      <% } %>
+      <div class="menu-cta">
+        <% if (business.whatsapp) { %>
+          <button type="button" class="btn btn-primary" data-open-cart>Abrir carrito</button>
+        <% } %>
+        <% if (business.address) { %>
+          <a class="btn btn-ghost" target="_blank" href="https://www.google.com/maps/search/?api=1&query=<%= encodeURIComponent(business.address) %>">Ubicacion</a>
+        <% } %>
+        <% if (business.instagram) { %>
+          <a class="btn btn-ghost" target="_blank" href="<%= business.instagram %>">Instagram</a>
+        <% } %>
+      </div>
+    </div>
+  </header>
+
+  <section class="menu-body">
+    <% if (grouped.length) { %>
+      <nav class="category-chips" aria-label="Categorias">
+        <% grouped.forEach((cat, idx) => { %>
+          <a class="chip" href="#cat-<%= cat.id || idx %>"><%= cat.name %></a>
+        <% }) %>
+      </nav>
+    <% } %>
+    <% if (!grouped.length) { %>
+      <div class="empty">Este comercio todavia no publico productos.</div>
+    <% } %>
+    <% grouped.forEach((cat, idx) => { %>
+      <article class="menu-category" id="cat-<%= cat.id || idx %>">
+        <h2><%= cat.name %></h2>
+        <div class="product-grid">
+          <% cat.products.forEach((p) => { %>
+            <div class="product-card <%= p.is_sold_out ? 'soldout' : '' %>">
+              <% if (p.image_url) { %><img src="<%= p.image_url %>" alt="<%= p.name %>" /><% } %>
+              <div>
+                <div class="product-title">
+                  <h3><%= p.name %></h3>
+                  <div>
+                    <% if (p.is_featured) { %><span class="tag tag-promo">Promo</span><% } %>
+                    <% if (p.is_sold_out) { %><span class="tag tag-warn">Agotado</span><% } %>
+                  </div>
+                </div>
+                <p><%= p.description || '' %></p>
+                <div class="price-row">
+                  <% if (p.previous_price) { %><small class="old-price">$<%= Number(p.previous_price).toLocaleString('es-AR') %></small><% } %>
+                  <strong>$<%= Number(p.price).toLocaleString('es-AR') %></strong>
+                </div>
+                <% if (!previewMode) { %>
+                  <button
+                    class="btn btn-primary menu-add-btn js-add-cart"
+                    type="button"
+                    data-product-id="<%= p.id %>"
+                    data-product-name="<%= p.name %>"
+                    data-product-price="<%= Number(p.price || 0) %>"
+                    data-product-soldout="<%= p.is_sold_out ? '1' : '0' %>"
+                    <%= p.is_sold_out ? 'disabled' : '' %>
+                  >
+                    <%= p.is_sold_out ? 'Agotado' : 'Agregar' %>
+                  </button>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </article>
+    <% }) %>
+  </section>
+
+  <% if (!previewMode) { %>
+    <button type="button" class="cart-float" data-open-cart>
+      <span>Carrito</span>
+      <strong data-cart-count>0</strong>
+    </button>
+
+    <aside class="cart-drawer" data-cart-drawer aria-hidden="true">
+      <div class="cart-overlay" data-close-cart></div>
+      <section class="cart-panel">
+        <header class="cart-head">
+          <h2>Tu pedido</h2>
+          <button type="button" class="btn btn-ghost" data-close-cart>Cerrar</button>
+        </header>
+
+        <div class="cart-items" data-cart-items>
+          <p class="empty">Todavia no agregaste productos.</p>
+        </div>
+
+        <div class="cart-summary">
+          <div><span>Subtotal</span><strong data-cart-subtotal>$0</strong></div>
+          <div data-shipping-row class="hidden"><span data-shipping-label>Envio</span><strong data-cart-shipping>$0</strong></div>
+          <div class="cart-total"><span>Total</span><strong data-cart-total>$0</strong></div>
+          <small class="muted hidden" data-estimated-time></small>
+        </div>
+
+        <form class="cart-form" data-cart-form>
+          <label>Nombre del cliente
+            <input type="text" name="customer_name" required />
+          </label>
+
+          <label>Tipo de pedido
+            <select name="order_type" required>
+              <% if (business.pickup_enabled) { %><option value="retiro">Retiro en local</option><% } %>
+              <% if (business.delivery_enabled) { %><option value="envio">Envio a domicilio</option><% } %>
+            </select>
+          </label>
+
+          <label data-zone-wrap class="hidden">Zona de envio
+            <select name="delivery_zone_id">
+              <option value="">Seleccionar zona</option>
+            </select>
+          </label>
+          <label data-address-wrap class="hidden">Direccion
+            <input type="text" name="address" />
+          </label>
+          <label data-reference-wrap class="hidden">Referencia
+            <input type="text" name="reference" />
+          </label>
+
+          <fieldset class="payment-fieldset" data-payment-wrap>
+            <legend>Metodo de pago</legend>
+            <div class="payment-options" data-payment-options></div>
+            <div class="transfer-box hidden" data-transfer-box></div>
+            <label data-cash-change-wrap class="hidden">Con cuanto pagas? (opcional)
+              <input type="number" step="0.01" min="0" name="cash_change_amount" />
+            </label>
+            <p class="cart-error hidden" data-payment-error></p>
+          </fieldset>
+
+          <label>Observaciones
+            <textarea name="notes" placeholder="Sin cebolla, tocar timbre, etc."></textarea>
+          </label>
+          <p class="cart-error hidden" data-cart-error></p>
+          <button type="submit" class="btn btn-primary">Enviar pedido por WhatsApp</button>
+        </form>
+      </section>
+    </aside>
+  <% } %>
+</section>

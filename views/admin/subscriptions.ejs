@@ -1,0 +1,48 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/admin-nav") %>
+  <section class="how">
+    <%- include("../partials/flash") %>
+    <section class="card">
+      <h1>Crear suscripcion pagada (demo)</h1>
+      <form method="post" action="/admin/subscriptions/create-paid" class="form inline">
+        <select name="business_id" required>
+          <% businesses.forEach((b) => { %><option value="<%= b.id %>"><%= b.business_name %></option><% }) %>
+        </select>
+        <select name="plan_id" required>
+          <% plans.forEach((p) => { %><option value="<%= p.id %>"><%= p.name %> - $<%= Number(p.price).toLocaleString("es-AR") %></option><% }) %>
+        </select>
+        <input type="number" step="0.01" min="0" name="amount" placeholder="Monto (opcional)" />
+        <button class="btn btn-primary" type="submit">Registrar pago</button>
+      </form>
+      <p class="muted">Al registrar pago, si el comercio tiene affiliate_id se crea venta affiliate con estado PENDING.</p>
+    </section>
+    <section class="card">
+      <h2>Suscripciones recientes</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Status</th><th>Accion</th></tr></thead>
+          <tbody>
+            <% subscriptions.forEach((s) => { %>
+              <tr>
+                <td><%= s.created_at %></td>
+                <td><%= s.business_name %></td>
+                <td><%= s.plan_name %></td>
+                <td>$<%= Number(s.amount).toLocaleString("es-AR") %></td>
+                <td><span class="tag"><%= s.status %></span></td>
+                <td>
+                  <% if (String(s.status).toLowerCase() !== 'paid') { %>
+                    <form method="post" action="/admin/subscriptions/<%= s.id %>/mark-paid">
+                      <button class="btn btn-ghost" type="submit">Marcar paid</button>
+                    </form>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

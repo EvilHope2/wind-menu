@@ -1,0 +1,13 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <header class="page-head"><h1>QR del menu</h1></header>
+    <section class="card qr-card">
+      <img src="<%= qrDataUrl %>" alt="QR del menu" />
+      <p><a class="link" target="_blank" href="/<%= business.slug %>"><%= menuUrl %></a></p>
+      <a class="btn btn-primary" href="/app/qr/download">Descargar PNG</a>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

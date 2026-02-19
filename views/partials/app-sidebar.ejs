@@ -1,0 +1,25 @@
+<div class="sidebar-overlay" data-sidebar-overlay></div>
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div>
+      <strong>Windi Menu</strong>
+      <small>Panel Comercio</small>
+    </div>
+  </div>
+  <nav class="menu">
+    <a class="<%= activePage === 'dashboard' ? 'active' : '' %>" href="/app"><i data-lucide="layout-dashboard"></i>Inicio</a>
+    <a class="<%= activePage === 'business' ? 'active' : '' %>" href="/app/business"><i data-lucide="store"></i>Mi comercio</a>
+    <a class="<%= activePage === 'delivery-settings' ? 'active' : '' %>" href="/app/delivery-settings"><i data-lucide="truck"></i>Config delivery</a>
+    <a class="<%= activePage === 'categories' ? 'active' : '' %>" href="/app/categories"><i data-lucide="folder"></i>Categorias</a>
+    <a class="<%= activePage === 'products' ? 'active' : '' %>" href="/app/products"><i data-lucide="package"></i>Productos</a>
+    <a class="<%= activePage === 'delivery-zones' ? 'active' : '' %>" href="/app/delivery-zones"><i data-lucide="map-pin"></i>Zonas de envio</a>
+    <a class="<%= activePage === 'payment-methods' ? 'active' : '' %>" href="/app/payment-methods"><i data-lucide="credit-card"></i>Metodos de pago</a>
+    <a class="<%= activePage === 'business-hours' ? 'active' : '' %>" href="/app/business-hours"><i data-lucide="clock-3"></i>Horarios y estado</a>
+    <a class="<%= activePage === 'preview' ? 'active' : '' %>" href="/app/preview"><i data-lucide="eye"></i>Vista previa</a>
+    <a class="<%= activePage === 'qr' ? 'active' : '' %>" href="/app/qr"><i data-lucide="qr-code"></i>QR del menu</a>
+  </nav>
+  <form action="/logout" method="post" class="logout-form">
+    <button class="btn btn-ghost" type="submit"><i data-lucide="log-out"></i>Cerrar sesion</button>
+  </form>
+</aside>

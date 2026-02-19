@@ -1,0 +1,40 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head"><h1>Categorias</h1></header>
+
+    <section class="card">
+      <h2>Nueva categoria</h2>
+      <form method="post" action="/app/categories" class="form inline">
+        <input type="text" name="name" placeholder="Ej: Pizzas" required />
+        <input type="number" name="sort_order" placeholder="Orden" value="0" />
+        <button class="btn btn-primary" type="submit">Agregar</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Listado</h2>
+      <% if (!categories.length) { %>
+        <div class="empty">Todavia no cargaste categorias.</div>
+      <% } %>
+      <% categories.forEach((c) => { %>
+        <form method="post" action="/app/categories/<%= c.id %>/update" class="form inline">
+          <input type="text" name="name" value="<%= c.name %>" required />
+          <input type="number" name="sort_order" value="<%= c.sort_order %>" />
+          <button class="btn btn-ghost" type="submit">Guardar</button>
+          <button
+            class="btn btn-danger js-confirm"
+            data-confirm="Se eliminara la categoria y los productos quedaran sin categoria. Continuar?"
+            formaction="/app/categories/<%= c.id %>/delete"
+            type="submit"
+          >
+            Eliminar
+          </button>
+        </form>
+      <% }) %>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

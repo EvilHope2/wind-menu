@@ -1,0 +1,33 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head">
+      <h1>Mi comercio</h1>
+      <p class="muted">Personaliza tu perfil publico y comparte tu link.</p>
+    </header>
+
+    <section class="card">
+      <form method="post" action="/app/business" class="form two-col" enctype="multipart/form-data">
+        <label>Nombre del comercio<input type="text" name="business_name" value="<%= business.business_name || '' %>" required /></label>
+        <label>Slug personalizado<input type="text" name="slug" value="<%= business.slug || '' %>" required /></label>
+        <label>WhatsApp<input type="text" name="whatsapp" value="<%= business.whatsapp || '' %>" required /></label>
+        <label>Direccion<input type="text" name="address" value="<%= business.address || '' %>" /></label>
+        <label>Horarios<textarea name="hours"><%= business.hours || '' %></textarea></label>
+        <label>Instagram<input type="text" name="instagram" value="<%= business.instagram || '' %>" /></label>
+        <label>Metodos de pago<textarea name="payment_methods"><%= business.payment_methods || '' %></textarea></label>
+        <label>Color principal<input type="color" name="primary_color" value="<%= business.primary_color || '#e6582d' %>" /></label>
+        <label>Costo envio fijo (fallback)<input type="number" step="0.01" min="0" name="shipping_fee" value="<%= business.shipping_fee || 0 %>" /></label>
+        <label>Instrucciones transferencia (opcional)<textarea name="transfer_instructions"><%= business.transfer_instructions || '' %></textarea></label>
+        <label>Logo URL<input type="text" name="logo_url" value="<%= business.logo_url || '' %>" /></label>
+        <label>Subir logo<input type="file" name="logo_file" accept="image/*" /></label>
+        <label>Portada URL<input type="text" name="cover_url" value="<%= business.cover_url || '' %>" /></label>
+        <label>Subir portada<input type="file" name="cover_file" accept="image/*" /></label>
+        <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      </form>
+      <p class="muted">Vista final: <a class="link" target="_blank" href="/<%= business.slug %>"><%= menuUrl %></a></p>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

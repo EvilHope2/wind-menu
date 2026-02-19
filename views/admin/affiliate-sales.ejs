@@ -1,0 +1,57 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/admin-nav") %>
+  <section class="how">
+    <%- include("../partials/flash") %>
+    <section class="card">
+      <form method="get" action="/admin/affiliate-sales" class="form inline">
+        <select name="status">
+          <% ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'REVERSED', 'ALL'].forEach((s) => { %>
+            <option value="<%= s %>" <%= filterStatus === s ? 'selected' : '' %>><%= s %></option>
+          <% }) %>
+        </select>
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+      </form>
+    </section>
+    <section class="card">
+      <h1>Revision de ventas afiliados</h1>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Afiliado</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Comision</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>
+            <% sales.forEach((s) => { %>
+              <tr>
+                <td><%= s.created_at %></td>
+                <td><%= s.affiliate_name %> (<code><%= s.ref_code %></code>)</td>
+                <td><%= s.business_name || '-' %></td>
+                <td><%= s.plan_name || '-' %></td>
+                <td>$<%= Number(s.amount || 0).toLocaleString("es-AR") %></td>
+                <td>$<%= Number(s.commission_amount || 0).toLocaleString("es-AR") %></td>
+                <td><span class="tag"><%= s.status %></span></td>
+                <td class="actions">
+                  <% if (s.status === 'PENDING') { %>
+                    <form method="post" action="/admin/affiliate-sales/<%= s.id %>/approve">
+                      <input type="text" name="review_note" placeholder="Nota (opc)" />
+                      <button class="btn btn-primary" type="submit">Aprobar</button>
+                    </form>
+                    <form method="post" action="/admin/affiliate-sales/<%= s.id %>/reject">
+                      <input type="text" name="review_note" placeholder="Motivo rechazo" />
+                      <button class="btn btn-danger" type="submit">Rechazar</button>
+                    </form>
+                  <% } %>
+                  <% if (s.status === 'APPROVED' || s.status === 'PAID') { %>
+                    <form method="post" action="/admin/affiliate-sales/<%= s.id %>/reverse">
+                      <input type="text" name="reverse_note" placeholder="Motivo reversa" />
+                      <button class="btn btn-danger js-confirm" data-confirm="Revertir esta venta?" type="submit">Revertir</button>
+                    </form>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

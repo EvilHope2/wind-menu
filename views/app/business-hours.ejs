@@ -1,0 +1,48 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head">
+      <h1>Horarios y estado</h1>
+      <p class="muted">Controla si el local esta abierto y bloquea pedidos fuera de horario.</p>
+    </header>
+
+    <section class="card">
+      <form method="post" action="/app/business-hours" class="form">
+        <label class="checkbox">
+          <input type="checkbox" name="is_temporarily_closed" <%= business.is_temporarily_closed ? 'checked' : '' %> />
+          Cerrar temporalmente el local
+        </label>
+        <label>Mensaje cierre temporal (opcional)
+          <textarea name="temporary_closed_message" placeholder="Ej: volvemos a las 20:00"><%= business.temporary_closed_message || '' %></textarea>
+        </label>
+        <label>Zona horaria
+          <input type="text" name="timezone" value="<%= business.timezone || 'America/Argentina/Ushuaia' %>" />
+        </label>
+
+        <div class="card">
+          <h2>Horario semanal</h2>
+          <div class="hours-grid">
+            <% const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']; %>
+            <% for (let day = 0; day <= 6; day += 1) { %>
+              <% const row = hours.find((h) => Number(h.day_of_week) === day) || {}; %>
+              <div class="hours-row">
+                <strong><%= dayNames[day] %></strong>
+                <label class="checkbox">
+                  <input type="checkbox" name="is_open_<%= day %>" <%= row.is_open ? 'checked' : '' %> />
+                  Abierto
+                </label>
+                <input type="time" name="open_time_<%= day %>" value="<%= row.open_time || '' %>" />
+                <input type="time" name="close_time_<%= day %>" value="<%= row.close_time || '' %>" />
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Guardar horarios</button>
+      </form>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

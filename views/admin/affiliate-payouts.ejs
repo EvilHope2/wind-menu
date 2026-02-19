@@ -1,0 +1,65 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/admin-nav") %>
+  <section class="how">
+    <%- include("../partials/flash") %>
+    <section class="card">
+      <h1>Payouts semanales</h1>
+      <form method="get" action="/admin/affiliate-payouts" class="form inline">
+        <input type="date" name="period_start" value="<%= periodStart %>" required />
+        <input type="date" name="period_end" value="<%= periodEnd %>" required />
+        <button class="btn btn-primary" type="submit">Actualizar periodo</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Candidatos payout</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Afiliado</th><th>Aprobado</th><th>Deuda</th><th>A pagar</th><th>Accion</th></tr></thead>
+          <tbody>
+            <% payoutCandidates.forEach((row) => { %>
+              <tr>
+                <td><%= row.affiliate.full_name %> (<%= row.affiliate.email %>)</td>
+                <td>$<%= Number(row.approved).toLocaleString("es-AR") %></td>
+                <td>$<%= Number(row.debt).toLocaleString("es-AR") %></td>
+                <td><strong>$<%= Number(row.payable).toLocaleString("es-AR") %></strong></td>
+                <td>
+                  <form method="post" action="/admin/affiliate-payouts/generate" class="form inline">
+                    <input type="hidden" name="affiliate_id" value="<%= row.affiliate.id %>" />
+                    <input type="hidden" name="period_start" value="<%= periodStart %>" />
+                    <input type="hidden" name="period_end" value="<%= periodEnd %>" />
+                    <input type="text" name="method" placeholder="Metodo" value="transferencia" />
+                    <input type="text" name="note" placeholder="Nota (opc)" />
+                    <button class="btn btn-primary" type="submit">Generar payout</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Historial</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Afiliado</th><th>Periodo</th><th>Monto</th><th>Metodo</th></tr></thead>
+          <tbody>
+            <% payouts.forEach((p) => { %>
+              <tr>
+                <td><%= p.created_at %></td>
+                <td><%= p.full_name %></td>
+                <td><%= p.period_start %> a <%= p.period_end %></td>
+                <td>$<%= Number(p.amount_paid || 0).toLocaleString("es-AR") %></td>
+                <td><%= p.method || '-' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

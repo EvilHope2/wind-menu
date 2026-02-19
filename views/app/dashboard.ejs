@@ -1,0 +1,27 @@
+<%- include("../partials/head", { title }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+    <header class="page-head">
+      <div>
+        <h1>Hola, <%= currentUser.fullName %></h1>
+        <p class="muted">Gestiona tu menu digital de forma autogestionable.</p>
+      </div>
+      <a class="btn btn-primary" href="/app/products/new">Nuevo producto</a>
+    </header>
+
+    <section class="stats-grid">
+      <article class="stat-card"><h3>Categorias</h3><strong><%= totals.categories %></strong></article>
+      <article class="stat-card"><h3>Productos</h3><strong><%= totals.products %></strong></article>
+      <article class="stat-card"><h3>Promos</h3><strong><%= totals.featured %></strong></article>
+      <article class="stat-card"><h3>Agotados</h3><strong><%= totals.soldOut %></strong></article>
+    </section>
+
+    <section class="card">
+      <h2>Tu link publico</h2>
+      <p><a class="link" href="/<%= business.slug %>" target="_blank">/<%= business.slug %></a></p>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>
