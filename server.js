@@ -169,11 +169,12 @@ function getBusinessByUserId(userId) {
   return db.prepare("SELECT * FROM businesses WHERE user_id = ?").get(userId);
 }
 
-async function resolveBusinessForUser(userId) {
+function resolveBusinessForUser(userId) {
   let business = getBusinessByUserId(userId);
   if (business) return business;
   if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
-    await pullMirrorNow();
+    // Non-blocking refresh to avoid slow auth requests in serverless.
+    pullMirrorNow();
     business = getBusinessByUserId(userId);
   }
   return business || null;
@@ -439,9 +440,9 @@ function canCreateProductForBusiness(businessId) {
   return { allowed: Number(total) < limit, maxProducts: limit, total: Number(total) };
 }
 
-async function ensureActiveSubscriptionAccess(req, res, next) {
+function ensureActiveSubscriptionAccess(req, res, next) {
   if (!req.session?.user || req.session.user.role !== "COMMERCE") return next();
-  const business = await resolveBusinessForUser(req.session.user.id);
+  const business = resolveBusinessForUser(req.session.user.id);
   if (!business) {
     req.session.flash = {
       type: "error",
@@ -490,6 +491,8 @@ async function createMercadoPagoPreference({ subscription, plan, business, user,
     auto_return: "approved",
   };
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
     method: "POST",
     headers: {
@@ -497,7 +500,9 @@ async function createMercadoPagoPreference({ subscription, plan, business, user,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const text = await response.text();
@@ -509,13 +514,17 @@ async function createMercadoPagoPreference({ subscription, plan, business, user,
 
 async function getMercadoPagoPayment(paymentId) {
   if (!MP_ACCESS_TOKEN) throw new Error("Mercado Pago no esta configurado.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
       "Content-Type": "application/json",
     },
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`No se pudo consultar pago ${paymentId}: ${text.slice(0, 180)}`);
@@ -811,7 +820,7 @@ app.get("/r/:refCode", (req, res) => {
   res.redirect(`/register?ref=${encodeURIComponent(refCode)}`);
 });
 
-app.post("/register", async (req, res) => {
+app.post("/register", (req, res) => {
   const { full_name, business_name, whatsapp, email, password } = req.body;
   const cleanEmail = String(email || "").trim().toLowerCase();
   const minPassword = String(password || "");
@@ -871,17 +880,17 @@ app.post("/register", async (req, res) => {
   };
 
   clearCookie(res, "windi_ref_code");
-  await pushMirrorNow();
+  scheduleMirrorPush();
 
   return flashAndRedirect(req, res, "success", "Cuenta creada correctamente.", "/onboarding/welcome");
 });
 
-app.get("/login", async (req, res) => {
+app.get("/login", (req, res) => {
   if (req.session.user) {
     const role = req.session.user.role || "COMMERCE";
     if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
     if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
-    const business = await resolveBusinessForUser(req.session.user.id);
+    const business = resolveBusinessForUser(req.session.user.id);
     if (!business) return res.redirect("/onboarding/plan");
     const gate = resolveCommerceGate(business.id);
     return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
@@ -889,7 +898,7 @@ app.get("/login", async (req, res) => {
   res.render("auth-login", { title: "Iniciar sesion | Windi Menu" });
 });
 
-app.post("/login", async (req, res) => {
+app.post("/login", (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "");
 
@@ -907,7 +916,7 @@ app.post("/login", async (req, res) => {
   } else if (role === "ADMIN") {
     target = "/admin/affiliate-sales";
   } else {
-    const business = await resolveBusinessForUser(user.id);
+    const business = resolveBusinessForUser(user.id);
     if (business) {
       const gate = resolveCommerceGate(business.id);
       target = gate.allowed ? "/app" : gate.redirectTo;
@@ -931,8 +940,8 @@ app.get("/support", (_req, res) => {
   res.status(200).send("Soporte Windi Menu: hola@windimenu.com");
 });
 
-app.get("/onboarding/welcome", requireRole("COMMERCE"), async (req, res) => {
-  const business = await resolveBusinessForUser(req.session.user.id);
+app.get("/onboarding/welcome", requireRole("COMMERCE"), (req, res) => {
+  const business = resolveBusinessForUser(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "error", "Estamos preparando tu comercio. Reintenta en unos segundos.", "/onboarding/plan");
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
@@ -942,8 +951,8 @@ app.get("/onboarding/welcome", requireRole("COMMERCE"), async (req, res) => {
   });
 });
 
-app.get("/onboarding/plan", requireRole("COMMERCE"), async (req, res) => {
-  const business = await resolveBusinessForUser(req.session.user.id);
+app.get("/onboarding/plan", requireRole("COMMERCE"), (req, res) => {
+  const business = resolveBusinessForUser(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "error", "Estamos preparando tu comercio. Reintenta en unos segundos.", "/login");
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
@@ -960,8 +969,8 @@ app.get("/onboarding/plan", requireRole("COMMERCE"), async (req, res) => {
   });
 });
 
-app.get("/onboarding/checkout", requireRole("COMMERCE"), async (req, res) => {
-  const business = await resolveBusinessForUser(req.session.user.id);
+app.get("/onboarding/checkout", requireRole("COMMERCE"), (req, res) => {
+  const business = resolveBusinessForUser(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "error", "Estamos preparando tu comercio. Reintenta en unos segundos.", "/onboarding/plan");
   const gate = resolveCommerceGate(business.id);
   if (gate.allowed) return res.redirect("/app");
