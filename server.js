@@ -1760,6 +1760,7 @@ app.get("/onboarding/checkout", requireRole("COMMERCE"), async (req, res) => {
 
 app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res) => {
   try {
+    ensureDefaultPlans();
     if (!req.body.accept_legal_checkout) {
       return res.status(400).json({ ok: false, message: "Debes confirmar terminos y privacidad para pagar." });
     }
@@ -1781,10 +1782,21 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
     const planId = Number(req.body.plan_id || 0);
     let plan = null;
     if (planCode) {
-      plan = db.prepare("SELECT * FROM plans WHERE code = ? AND is_active = 1 LIMIT 1").get(planCode);
+      plan = db
+        .prepare(
+          `SELECT *
+           FROM plans
+           WHERE (UPPER(COALESCE(code, '')) = ? OR UPPER(COALESCE(display_name, '')) = ? OR UPPER(COALESCE(name, '')) = ?)
+             AND COALESCE(is_active, 1) = 1
+           ORDER BY id ASC
+           LIMIT 1`
+        )
+        .get(planCode, planCode, planCode);
     }
     if (!plan && planId) {
-      plan = db.prepare("SELECT * FROM plans WHERE id = ? AND is_active = 1 LIMIT 1").get(planId);
+      plan = db
+        .prepare("SELECT * FROM plans WHERE id = ? AND COALESCE(is_active, 1) = 1 LIMIT 1")
+        .get(planId);
     }
     if (!plan) return res.status(400).json({ ok: false, message: "Plan invalido." });
     if (!MP_ACCESS_TOKEN) return res.status(503).json({ ok: false, message: "Pasarela no configurada." });
