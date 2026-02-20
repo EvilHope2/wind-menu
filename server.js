@@ -135,63 +135,7 @@ if (IS_VERCEL) {
 }
 
 app.use((req, res, next) => {
-  const user = req.session?.user;
-  if (!user) return next();
-
-  const role = user.role || "COMMERCE";
-  if (!["COMMERCE", "AFFILIATE"].includes(role)) return next();
-
-  const openPaths = [
-    "/",
-    "/precios",
-    "/faq",
-    "/demo",
-    "/como-funciona",
-    "/status",
-    "/soporte",
-    "/contacto",
-    "/terminos",
-    "/privacidad",
-    "/cookies",
-    "/reembolsos",
-    "/legal/accept",
-    "/legal/aceptar",
-    "/logout",
-    "/login",
-    "/register",
-    "/registro",
-    "/support",
-    "/afiliados/login",
-    "/afiliados/registro",
-    "/robots.txt",
-  ];
-
-  if (openPaths.some((path) => req.path === path || req.path.startsWith(`${path}/`))) {
-    return next();
-  }
-
-  if (req.path.startsWith("/public") || req.path.startsWith("/uploads") || req.path.startsWith("/r/")) {
-    return next();
-  }
-
-  const hasConsent = hasLatestLegalConsent(user.id, role);
-  if (hasConsent) return next();
-
-  const bypass = req.session.legalConsentBypass;
-  if (
-    bypass &&
-    bypass.role === role &&
-    Number(bypass.expiresAt || 0) > Date.now()
-  ) {
-    return next();
-  }
-
-  req.session.flash = {
-    type: "error",
-    text: "Necesitas aceptar los Terminos y la Politica de Privacidad vigentes para continuar.",
-  };
-  const returnTo = encodeURIComponent(req.originalUrl || "/app");
-  return res.redirect(`/legal/accept?source=guard&return_to=${returnTo}`);
+  return next();
 });
 
 app.use("/afiliados", (req, res, next) => {
@@ -1795,69 +1739,26 @@ app.get("/reembolsos", (_req, res) => {
 
 app.get("/legal/accept", requireAuth, (req, res) => {
   const role = req.session.user.role || "COMMERCE";
-  if (!["COMMERCE", "AFFILIATE"].includes(role)) return res.redirect("/");
-  if (hasLatestLegalConsent(req.session.user.id, role)) {
-    if (role === "AFFILIATE") return res.redirect("/afiliados/panel");
-    const business = getBusinessByUserId(req.session.user.id);
-    if (!business) return renderBusinessProvisioning(res);
-    const gate = resolveCommerceGate(business.id);
-    return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
-  }
-  res.render("legal/accept", {
-    title: "Aceptar terminos legales | Windi Menu",
-    legal: LEGAL_VERSIONS,
-    source: String(req.query.source || "settings"),
-    returnTo: String(req.query.return_to || ""),
-  });
+  if (role === "AFFILIATE") return res.redirect("/afiliados/panel");
+  if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
+  const business = getBusinessByUserId(req.session.user.id);
+  if (!business) return renderBusinessProvisioning(res);
+  const gate = resolveCommerceGate(business.id);
+  return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
 });
 
 app.post("/legal/accept", requireAuth, (req, res) => {
   const role = req.session.user.role || "COMMERCE";
-  if (!["COMMERCE", "AFFILIATE"].includes(role)) return res.redirect("/");
-
-  if (!req.body.accept_legal) {
-    return flashAndRedirect(
-      req,
-      res,
-      "error",
-      "Debes aceptar los Terminos y la Politica de Privacidad para continuar.",
-      "/legal/accept"
-    );
-  }
-
-  const saved = recordLegalConsent(req, {
-    userId: req.session.user.id,
-    role,
-    source: String(req.body.source || "settings"),
-  });
-  const persisted = saved && hasLatestLegalConsent(req.session.user.id, role);
-  if (!persisted) {
-    req.session.legalConsentBypass = {
-      role,
-      expiresAt: Date.now() + 1000 * 60 * 10,
-    };
-  } else if (req.session.legalConsentBypass) {
-    delete req.session.legalConsentBypass;
-  }
-
-  const rawReturnTo = String(req.body.return_to || "").trim();
-  const isSafeReturnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//");
-  if (isSafeReturnTo) {
-    return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", rawReturnTo);
-  }
-
-  if (role === "AFFILIATE") {
-    return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/afiliados/panel");
-  }
+  if (role === "AFFILIATE") return res.redirect("/afiliados/panel");
+  if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
   const business = getBusinessByUserId(req.session.user.id);
-  if (!business) return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/onboarding/plan");
+  if (!business) return res.redirect("/onboarding/plan");
   const gate = resolveCommerceGate(business.id);
-  return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", gate.allowed ? "/app" : gate.redirectTo);
+  return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
 });
 
 app.get("/legal/aceptar", requireAuth, (req, res) => {
-  const source = String(req.query.source || "");
-  return res.redirect(source ? `/legal/accept?source=${encodeURIComponent(source)}` : "/legal/accept");
+  return res.redirect("/legal/accept");
 });
 
 app.get("/settings/legal", requireAuth, (req, res) => {
@@ -1951,16 +1852,6 @@ app.get("/onboarding/checkout", requireRole("COMMERCE"), async (req, res) => {
 app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res) => {
   try {
     ensureDefaultPlans();
-    if (!req.body.accept_legal_checkout) {
-      return res.status(400).json({ ok: false, message: "Debes confirmar terminos y privacidad para pagar." });
-    }
-    if (!hasLatestLegalConsent(req.session.user.id, "COMMERCE")) {
-      return res.status(403).json({
-        ok: false,
-        message: "Debes aceptar Terminos y Privacidad antes de continuar.",
-        redirect_to: "/legal/accept?source=checkout",
-      });
-    }
     const business = getBusinessByUserId(req.session.user.id);
     if (!business) return res.status(400).json({ ok: false, message: "Comercio no encontrado." });
     const gate = resolveCommerceGate(business.id);
@@ -2323,24 +2214,6 @@ app.post("/mi-cuenta", requireRole("COMMERCE"), (req, res) => {
 });
 
 app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
-  if (!req.body.accept_legal_checkout) {
-    return flashAndRedirect(
-      req,
-      res,
-      "error",
-      "Debes confirmar terminos y privacidad para continuar.",
-      "/billing"
-    );
-  }
-  if (!hasLatestLegalConsent(req.session.user.id, "COMMERCE")) {
-    return flashAndRedirect(
-      req,
-      res,
-      "error",
-      "Debes aceptar Terminos y Privacidad para continuar con la compra.",
-      "/legal/accept?source=checkout"
-    );
-  }
   const business = getBusinessByUserId(req.session.user.id);
   const user = db.prepare("SELECT id, email, full_name FROM users WHERE id = ?").get(req.session.user.id);
   const planId = Number(req.params.id);
