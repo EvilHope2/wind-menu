@@ -3549,7 +3549,7 @@ app.post("/admin/subscriptions/:id/mark-paid", requireRole("ADMIN"), (req, res) 
   return flashAndRedirect(req, res, "success", "Suscripcion marcada como pagada.", "/admin/subscriptions");
 });
 
-app.get("/:slug", (req, res, next) => {
+app.get("/:slug", async (req, res, next) => {
   const slug = req.params.slug;
   const reserved = new Set([
     "app",
@@ -3583,6 +3583,14 @@ app.get("/:slug", (req, res, next) => {
     "favicon.ico",
   ]);
   if (reserved.has(slug)) return next();
+
+  if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
+    try {
+      await withTimeout(pullMirrorNow(), 1800);
+    } catch (_error) {
+      // Fallback to local snapshot if mirror pull is delayed.
+    }
+  }
 
   const business = db.prepare("SELECT * FROM businesses WHERE slug = ?").get(slug);
   if (!business) return next();
