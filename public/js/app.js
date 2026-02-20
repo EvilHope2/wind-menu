@@ -176,6 +176,7 @@ document.addEventListener("click", async (event) => {
   const ctaTotalNode = root.querySelector("[data-cart-cta-total]");
   const fabTotalNode = root.querySelector("[data-cart-fab-total]");
   const estimatedTimeNode = root.querySelector("[data-estimated-time]");
+  const freeShippingHintNode = root.querySelector("[data-free-shipping-hint]");
   const form = root.querySelector("[data-cart-form]");
   const zoneWrap = root.querySelector("[data-zone-wrap]");
   const addressWrap = root.querySelector("[data-address-wrap]");
@@ -541,6 +542,22 @@ document.addEventListener("click", async (event) => {
     } else {
       estimatedTimeNode.textContent = "";
       estimatedTimeNode.classList.add("hidden");
+    }
+
+    if (freeShippingHintNode) {
+      if (isDelivery() && summary.freeOver > 0) {
+        if (summary.freeApplied) {
+          freeShippingHintNode.textContent = "Ya tenes envio gratis en esta zona.";
+          freeShippingHintNode.classList.remove("hidden");
+        } else {
+          const missing = Math.max(0, summary.freeOver - subtotal);
+          freeShippingHintNode.textContent = `Te faltan ${money.format(missing)} para envio gratis.`;
+          freeShippingHintNode.classList.remove("hidden");
+        }
+      } else {
+        freeShippingHintNode.textContent = "";
+        freeShippingHintNode.classList.add("hidden");
+      }
     }
 
     if (minimum > 0 && subtotal < minimum) {
