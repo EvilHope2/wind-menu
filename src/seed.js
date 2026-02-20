@@ -267,7 +267,7 @@ function createSeedData() {
   const plan = ensurePlan({
     code: "BASIC",
     displayName: "Basico",
-    priceArs: 1,
+    priceArs: 12999,
     maxProducts: 10,
   });
   ensurePlan({
