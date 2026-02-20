@@ -643,13 +643,8 @@ function displayPlanName(plan) {
 }
 
 function ensureDefaultPlans() {
-  const activeCount = db
-    .prepare("SELECT COUNT(*) AS total FROM plans WHERE is_active = 1")
-    .get().total;
-  if (Number(activeCount) > 0) return;
-
   const defaults = [
-    { code: "BASIC", display_name: "Basico", price_ars: 12999, max_products: 10 },
+    { code: "BASIC", display_name: "Basico", price_ars: 1, max_products: 10 },
     { code: "PREMIUM", display_name: "Premium", price_ars: 16999, max_products: 50 },
     { code: "ELITE", display_name: "Elite", price_ars: 21999, max_products: null },
   ];
