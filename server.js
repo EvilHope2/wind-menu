@@ -432,6 +432,46 @@ function getBusinessByUserId(userId) {
   return db.prepare("SELECT * FROM businesses WHERE user_id = ?").get(userId);
 }
 
+function ensureAdminAccount({ email, password, fullName }) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const rawPassword = String(password || "").trim();
+  if (!cleanEmail || !rawPassword) return false;
+
+  const existing = db.prepare("SELECT * FROM users WHERE email = ?").get(cleanEmail);
+  const passwordHash = bcrypt.hashSync(rawPassword, 10);
+  if (existing) {
+    db.prepare(
+      `UPDATE users
+       SET full_name = COALESCE(NULLIF(?, ''), full_name),
+           role = 'ADMIN',
+           password_hash = ?
+       WHERE id = ?`
+    ).run(String(fullName || "").trim(), passwordHash, existing.id);
+    return true;
+  }
+
+  db.prepare(
+    `INSERT INTO users (full_name, email, whatsapp, role, password_hash, created_at)
+     VALUES (?, ?, ?, 'ADMIN', ?, CURRENT_TIMESTAMP)`
+  ).run(String(fullName || "Admin"), cleanEmail, "5491100000000", passwordHash);
+  return true;
+}
+
+function ensureRuntimeAdminAccounts() {
+  let changed = false;
+  changed = ensureAdminAccount({
+    email: process.env.ADMIN_EMAIL || "nahuel.wind@admin.com",
+    password: process.env.ADMIN_PASSWORD || "13112024",
+    fullName: process.env.ADMIN_FULL_NAME || "Nahuel Admin",
+  }) || changed;
+  changed = ensureAdminAccount({
+    email: "admin@windi.menu",
+    password: "admin1234",
+    fullName: "Admin Windi",
+  }) || changed;
+  return changed;
+}
+
 function ensureBusinessForUser(userId) {
   let business = getBusinessByUserId(userId);
   if (business) return business;
@@ -3634,6 +3674,7 @@ async function bootstrap() {
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
+    let adminChanged = false;
     if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
       try {
         await applySupabaseSchema();
@@ -3644,6 +3685,10 @@ async function bootstrap() {
           createSeedData();
           await pushMirrorNow();
         }
+        adminChanged = ensureRuntimeAdminAccounts();
+        if (adminChanged) {
+          await pushMirrorNow();
+        }
       } catch (error) {
         if (SUPABASE_PRIMARY) {
           throw new Error(`Modo SUPABASE_PRIMARY activo. No se puede iniciar sin Supabase: ${error.message}`);
@@ -3651,10 +3696,15 @@ async function bootstrap() {
         console.error("Mirror pull inicial fallo, sigue con SQLite local:", error.message);
         const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
         if (!localUsers) createSeedData();
+        adminChanged = ensureRuntimeAdminAccounts();
       }
     } else {
       const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
       if (!localUsers) createSeedData();
+      adminChanged = ensureRuntimeAdminAccounts();
+    }
+    if (!RUNTIME_SYNC && adminChanged) {
+      // nothing else needed for local mode
     }
   })();
 
