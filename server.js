@@ -181,7 +181,8 @@ app.use((req, res, next) => {
     type: "error",
     text: "Necesitas aceptar los Terminos y la Politica de Privacidad vigentes para continuar.",
   };
-  return res.redirect("/legal/accept");
+  const returnTo = encodeURIComponent(req.originalUrl || "/app");
+  return res.redirect(`/legal/accept?source=guard&return_to=${returnTo}`);
 });
 
 app.use("/afiliados", (req, res, next) => {
@@ -315,6 +316,22 @@ function ensureLegalConsentsTable() {
     );
     CREATE INDEX IF NOT EXISTS idx_legal_consents_user_id ON legal_consents(user_id);
   `);
+  const cols = db.prepare("PRAGMA table_info(legal_consents)").all();
+  const required = [
+    ["role", "ALTER TABLE legal_consents ADD COLUMN role TEXT NOT NULL DEFAULT 'COMMERCE';"],
+    ["terms_version", "ALTER TABLE legal_consents ADD COLUMN terms_version TEXT NOT NULL DEFAULT '1.0.0';"],
+    ["privacy_version", "ALTER TABLE legal_consents ADD COLUMN privacy_version TEXT NOT NULL DEFAULT '1.0.0';"],
+    ["accepted_at", "ALTER TABLE legal_consents ADD COLUMN accepted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP;"],
+    ["ip_address", "ALTER TABLE legal_consents ADD COLUMN ip_address TEXT;"],
+    ["user_agent", "ALTER TABLE legal_consents ADD COLUMN user_agent TEXT;"],
+    ["source", "ALTER TABLE legal_consents ADD COLUMN source TEXT;"],
+    ["created_at", "ALTER TABLE legal_consents ADD COLUMN created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP;"],
+  ];
+  for (const [name, sql] of required) {
+    if (!cols.some((c) => c.name === name)) {
+      db.exec(sql);
+    }
+  }
 }
 
 function hasLatestLegalConsent(userId, role) {
@@ -1670,6 +1687,7 @@ app.get("/legal/accept", requireAuth, (req, res) => {
     title: "Aceptar terminos legales | Windi Menu",
     legal: LEGAL_VERSIONS,
     source: String(req.query.source || "settings"),
+    returnTo: String(req.query.return_to || ""),
   });
 });
 
@@ -1692,6 +1710,22 @@ app.post("/legal/accept", requireAuth, (req, res) => {
     role,
     source: String(req.body.source || "settings"),
   });
+  const persisted = hasLatestLegalConsent(req.session.user.id, role);
+  if (!persisted) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "No pudimos guardar tu aceptacion legal. Reintenta en unos segundos.",
+      "/legal/accept"
+    );
+  }
+
+  const rawReturnTo = String(req.body.return_to || "").trim();
+  const isSafeReturnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//");
+  if (isSafeReturnTo) {
+    return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", rawReturnTo);
+  }
 
   if (role === "AFFILIATE") {
     return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/afiliados/panel");

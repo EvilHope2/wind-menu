@@ -14,6 +14,7 @@
       <%- include("../partials/flash") %>
       <form method="post" action="/legal/accept" class="form">
         <input type="hidden" name="source" value="<%= source || 'settings' %>" />
+        <input type="hidden" name="return_to" value="<%= returnTo || '' %>" />
         <label class="checkbox">
           <input type="checkbox" name="accept_legal" value="1" required />
           <span>He leido y acepto los <a class="link" href="/terminos" target="_blank">Terminos y Condiciones</a> y la <a class="link" href="/privacidad" target="_blank">Politica de Privacidad</a>.</span>
