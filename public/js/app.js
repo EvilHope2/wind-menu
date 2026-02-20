@@ -145,7 +145,7 @@ document.addEventListener("click", async (event) => {
     label: "Abierto ahora",
     message: "",
   });
-  const deliveryZones = parseJson(root.dataset.deliveryZones, []);
+  let deliveryZones = parseJson(root.dataset.deliveryZones, []);
   const paymentMethods = parseJson(root.dataset.paymentMethods, {
     cash: true,
     transfer: true,
@@ -185,6 +185,7 @@ document.addEventListener("click", async (event) => {
   const paymentOptions = root.querySelector("[data-payment-options]");
   const transferBox = root.querySelector("[data-transfer-box]");
   const cashChangeWrap = root.querySelector("[data-cash-change-wrap]");
+  const zonesHelpNode = root.querySelector("[data-zones-help]");
   const errorNode = root.querySelector("[data-cart-error]");
   const paymentError = root.querySelector("[data-payment-error]");
 
@@ -440,6 +441,36 @@ document.addEventListener("click", async (event) => {
       if (deliveryOption.checked && pickupOption) {
         pickupOption.checked = true;
       }
+      if (zonesHelpNode) {
+        zonesHelpNode.textContent = "Este comercio no tiene zonas de envio configuradas.";
+        zonesHelpNode.classList.remove("hidden");
+      }
+    } else {
+      if (deliveryOption) deliveryOption.disabled = false;
+      if (zonesHelpNode) {
+        zonesHelpNode.textContent = "";
+        zonesHelpNode.classList.add("hidden");
+      }
+    }
+  }
+
+  async function refreshDeliveryZones() {
+    if (!slug) return;
+    try {
+      const response = await fetch(`/api/public/${encodeURIComponent(slug)}/delivery-zones`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data || !Array.isArray(data.zones)) return;
+      deliveryZones = data.zones;
+      hydrateZoneOptions();
+      syncOrderTypeWithZones();
+      toggleDeliveryFields();
+      render();
+    } catch (_error) {
+      // keep current zones snapshot
     }
   }
 
@@ -817,4 +848,5 @@ document.addEventListener("click", async (event) => {
   toggleDeliveryFields();
   togglePaymentExtras();
   render();
+  refreshDeliveryZones();
 })();

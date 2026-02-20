@@ -148,9 +148,7 @@
                     </label>
                   <% } %>
                 </div>
-                <% if (business.delivery_enabled && (!deliveryZones || !deliveryZones.length)) { %>
-                  <p class="cart-help">Este comercio no tiene zonas de envio configuradas.</p>
-                <% } %>
+                <p class="cart-help hidden" data-zones-help></p>
               </fieldset>
 
               <label data-zone-wrap class="hidden">Zona de envio

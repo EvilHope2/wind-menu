@@ -3549,6 +3549,22 @@ app.post("/admin/subscriptions/:id/mark-paid", requireRole("ADMIN"), (req, res) 
   return flashAndRedirect(req, res, "success", "Suscripcion marcada como pagada.", "/admin/subscriptions");
 });
 
+app.get("/api/public/:slug/delivery-zones", async (req, res) => {
+  const slug = String(req.params.slug || "").trim();
+  if (!slug) return res.status(400).json({ ok: false, message: "Slug invalido." });
+  if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
+    try {
+      await withTimeout(pullMirrorNow(), 1800);
+    } catch (_error) {
+      // continue with local snapshot if pull is delayed
+    }
+  }
+  const business = db.prepare("SELECT id FROM businesses WHERE slug = ?").get(slug);
+  if (!business) return res.status(404).json({ ok: false, message: "Comercio no encontrado." });
+  const zones = getActiveDeliveryZones(business.id);
+  return res.json({ ok: true, zones });
+});
+
 app.get("/:slug", async (req, res, next) => {
   const slug = req.params.slug;
   const reserved = new Set([
