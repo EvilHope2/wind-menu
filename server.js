@@ -892,6 +892,14 @@ async function ensureActiveSubscriptionAccess(req, res, next) {
   return res.redirect(gate.redirectTo);
 }
 
+async function ensureCommerceBusinessContext(req, res, next) {
+  if (!req.session?.user || req.session.user.role !== "COMMERCE") return next();
+  const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
+  if (!business) return renderBusinessProvisioning(res);
+  req.business = business;
+  return next();
+}
+
 async function createMercadoPagoPreference({ subscription, plan, business, user, returnBasePath, planCode }) {
   if (!MP_ACCESS_TOKEN) {
     throw new Error("Mercado Pago no esta configurado.");
@@ -2141,15 +2149,42 @@ async function processMercadoPagoWebhook(req, res) {
 app.post("/api/webhooks/mercadopago", processMercadoPagoWebhook);
 app.post("/webhooks/mercadopago", processMercadoPagoWebhook);
 
-app.use("/app", requireRole("COMMERCE"), ensureActiveSubscriptionAccess);
-app.use("/panel", requireRole("COMMERCE"), ensureActiveSubscriptionAccess);
+app.use("/app", requireRole("COMMERCE"), ensureActiveSubscriptionAccess, ensureCommerceBusinessContext);
+app.use("/panel", requireRole("COMMERCE"), ensureActiveSubscriptionAccess, ensureCommerceBusinessContext);
+app.use("/billing", requireRole("COMMERCE"), ensureCommerceBusinessContext);
 
 app.get("/panel", (_req, res) => res.redirect("/app"));
 app.get("/panel/dashboard", (_req, res) => res.redirect("/app"));
-app.get("/panel/:section", (req, res) => res.redirect(`/app/${req.params.section}`));
+app.get("/panel/:section", (req, res) => {
+  const section = String(req.params.section || "").trim().toLowerCase();
+  const aliases = {
+    "mi-comercio": "/app/business",
+    categorias: "/app/categories",
+    productos: "/app/products",
+    "zonas-envio": "/app/delivery-zones",
+    "delivery-zones": "/app/delivery-zones",
+    "metodos-pago": "/app/payment-methods",
+    horarios: "/app/business-hours",
+    "vista-previa": "/app/preview",
+    qr: "/app/qr",
+    billing: "/billing",
+    dashboard: "/app",
+    inicio: "/app",
+  };
+  return res.redirect(aliases[section] || `/app/${section}`);
+});
+
+app.get("/app/mi-comercio", (_req, res) => res.redirect("/app/business"));
+app.get("/app/categorias", (_req, res) => res.redirect("/app/categories"));
+app.get("/app/productos", (_req, res) => res.redirect("/app/products"));
+app.get("/app/zonas-envio", (_req, res) => res.redirect("/app/delivery-zones"));
+app.get("/app/metodos-pago", (_req, res) => res.redirect("/app/payment-methods"));
+app.get("/app/horarios", (_req, res) => res.redirect("/app/business-hours"));
+app.get("/app/vista-previa", (_req, res) => res.redirect("/app/preview"));
+app.get("/app/billing", (_req, res) => res.redirect("/billing"));
 
 app.get("/app", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   ensureBusinessHoursRows(business.id);
   const totals = {
     categories: db
@@ -2174,9 +2209,9 @@ app.get("/app", requireAuth, (req, res) => {
   });
 });
 
-app.get(["/app/plans", "/billing"], requireAuth, (req, res) => {
+app.get(["/app/plans", "/billing"], requireRole("COMMERCE"), (req, res) => {
   ensureDefaultPlans();
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business || getBusinessByUserId(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "error", "Comercio no encontrado.", "/register");
   const plans = db
     .prepare("SELECT * FROM plans WHERE is_active = 1 ORDER BY COALESCE(price_ars, price) ASC, id ASC")
@@ -2239,8 +2274,8 @@ app.post("/mi-cuenta", requireRole("COMMERCE"), (req, res) => {
   return flashAndRedirect(req, res, "success", "Datos actualizados.", "/mi-cuenta");
 });
 
-app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+app.post("/app/plans/:id/checkout", requireRole("COMMERCE"), async (req, res) => {
+  const business = req.business || getBusinessByUserId(req.session.user.id);
   const user = db.prepare("SELECT id, email, full_name FROM users WHERE id = ?").get(req.session.user.id);
   const planId = Number(req.params.id);
   const plan = db.prepare("SELECT * FROM plans WHERE id = ? AND is_active = 1").get(planId);
@@ -2310,7 +2345,7 @@ app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
 });
 
 app.get("/app/business", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   ensureBusinessHoursRows(business.id);
   res.render("app/business", {
     title: "Mi comercio | Windi Menu",
@@ -2328,7 +2363,7 @@ app.post(
     { name: "cover_file", maxCount: 1 },
   ]),
   (req, res) => {
-    const business = getBusinessByUserId(req.session.user.id);
+    const business = req.business;
     if (!business) return flashAndRedirect(req, res, "error", "Comercio no encontrado.", "/app");
 
     const body = req.body;
@@ -2377,7 +2412,7 @@ app.post(
 );
 
 app.get("/app/delivery-settings", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   res.render("app/delivery-settings", {
     title: "Configuracion delivery | Windi Menu",
     business,
@@ -2386,7 +2421,7 @@ app.get("/app/delivery-settings", requireAuth, (req, res) => {
 });
 
 app.post("/app/delivery-settings", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const deliveryEnabled = req.body.delivery_enabled ? 1 : 0;
   const pickupEnabled = req.body.pickup_enabled ? 1 : 0;
 
@@ -2417,7 +2452,7 @@ app.post("/app/delivery-settings", requireAuth, (req, res) => {
 });
 
 app.get("/app/business-hours", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   ensureBusinessHoursRows(business.id);
   const hours = getBusinessHours(business.id);
 
@@ -2430,7 +2465,7 @@ app.get("/app/business-hours", requireAuth, (req, res) => {
 });
 
 app.post("/app/business-hours", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   ensureBusinessHoursRows(business.id);
   const body = req.body;
 
@@ -2462,7 +2497,7 @@ app.post("/app/business-hours", requireAuth, (req, res) => {
 });
 
 app.get("/app/categories", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const categories = db
     .prepare("SELECT * FROM categories WHERE business_id = ? ORDER BY sort_order ASC, id ASC")
     .all(business.id);
@@ -2476,7 +2511,7 @@ app.get("/app/categories", requireAuth, (req, res) => {
 });
 
 app.post("/app/categories", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const name = String(req.body.name || "").trim();
   const sortOrder = Number(req.body.sort_order || 0);
   if (!name) {
@@ -2491,7 +2526,7 @@ app.post("/app/categories", requireAuth, (req, res) => {
 });
 
 app.post("/app/categories/:id/update", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const categoryId = Number(req.params.id);
   const category = db
     .prepare("SELECT * FROM categories WHERE id = ? AND business_id = ?")
@@ -2507,7 +2542,7 @@ app.post("/app/categories/:id/update", requireAuth, (req, res) => {
 });
 
 app.post("/app/categories/:id/delete", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const categoryId = Number(req.params.id);
   const category = db
     .prepare("SELECT * FROM categories WHERE id = ? AND business_id = ?")
@@ -2523,7 +2558,7 @@ app.post("/app/categories/:id/delete", requireAuth, (req, res) => {
 });
 
 app.get("/app/delivery-zones", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const zones = db
     .prepare(
       "SELECT * FROM delivery_zones WHERE business_id = ? ORDER BY sort_order ASC, id ASC"
@@ -2539,7 +2574,7 @@ app.get("/app/delivery-zones", requireAuth, (req, res) => {
 });
 
 app.post("/app/delivery-zones", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const name = String(req.body.name || "").trim();
   if (!name) {
     return flashAndRedirect(req, res, "error", "El nombre de zona es obligatorio.", "/app/delivery-zones");
@@ -2571,7 +2606,7 @@ app.post("/app/delivery-zones", requireAuth, (req, res) => {
 });
 
 app.post("/app/delivery-zones/:id/update", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const zoneId = Number(req.params.id);
   const zone = db
     .prepare("SELECT * FROM delivery_zones WHERE id = ? AND business_id = ?")
@@ -2608,7 +2643,7 @@ app.post("/app/delivery-zones/:id/update", requireAuth, (req, res) => {
 });
 
 app.post("/app/delivery-zones/:id/delete", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const zoneId = Number(req.params.id);
   const zone = db
     .prepare("SELECT id FROM delivery_zones WHERE id = ? AND business_id = ?")
@@ -2620,7 +2655,7 @@ app.post("/app/delivery-zones/:id/delete", requireAuth, (req, res) => {
 });
 
 app.get("/app/payment-methods", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   res.render("app/payment-methods", {
     title: "Metodos de pago | Windi Menu",
     business,
@@ -2629,7 +2664,7 @@ app.get("/app/payment-methods", requireAuth, (req, res) => {
 });
 
 app.post("/app/payment-methods", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const cash = req.body.payment_cash_enabled ? 1 : 0;
   const transfer = req.body.payment_transfer_enabled ? 1 : 0;
   const card = req.body.payment_card_enabled ? 1 : 0;
@@ -2680,7 +2715,7 @@ app.post("/app/payment-methods", requireAuth, (req, res) => {
 });
 
 app.get("/app/products", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const q = String(req.query.q || "").trim();
   const category = Number(req.query.category || 0);
 
@@ -2716,7 +2751,7 @@ app.get("/app/products", requireAuth, (req, res) => {
 });
 
 app.get("/app/products/new", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const categories = db
     .prepare("SELECT * FROM categories WHERE business_id = ? ORDER BY sort_order ASC, id ASC")
     .all(business.id);
@@ -2730,7 +2765,7 @@ app.get("/app/products/new", requireAuth, (req, res) => {
 });
 
 app.post("/app/products", requireAuth, upload.single("image_file"), (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const limitCheck = canCreateProductForBusiness(business.id);
   if (!limitCheck.allowed) {
     return flashAndRedirect(
@@ -2768,7 +2803,7 @@ app.post("/app/products", requireAuth, upload.single("image_file"), (req, res) =
 });
 
 app.get("/app/products/:id/edit", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const productId = Number(req.params.id);
   const product = db
     .prepare("SELECT * FROM products WHERE id = ? AND business_id = ?")
@@ -2789,7 +2824,7 @@ app.get("/app/products/:id/edit", requireAuth, (req, res) => {
 });
 
 app.post("/app/products/:id/update", requireAuth, upload.single("image_file"), (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const productId = Number(req.params.id);
   const product = db
     .prepare("SELECT * FROM products WHERE id = ? AND business_id = ?")
@@ -2824,7 +2859,7 @@ app.post("/app/products/:id/update", requireAuth, upload.single("image_file"), (
 });
 
 app.post("/app/products/:id/delete", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const productId = Number(req.params.id);
   const product = db
     .prepare("SELECT id FROM products WHERE id = ? AND business_id = ?")
@@ -2836,7 +2871,7 @@ app.post("/app/products/:id/delete", requireAuth, (req, res) => {
 });
 
 app.post("/app/products/:id/toggle-visible", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const productId = Number(req.params.id);
   const product = db
     .prepare("SELECT is_visible FROM products WHERE id = ? AND business_id = ?")
@@ -2850,7 +2885,7 @@ app.post("/app/products/:id/toggle-visible", requireAuth, (req, res) => {
 });
 
 app.post("/app/products/:id/toggle-soldout", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const productId = Number(req.params.id);
   const product = db
     .prepare("SELECT is_sold_out FROM products WHERE id = ? AND business_id = ?")
@@ -2864,7 +2899,7 @@ app.post("/app/products/:id/toggle-soldout", requireAuth, (req, res) => {
 });
 
 app.post("/app/products/:id/duplicate", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const limitCheck = canCreateProductForBusiness(business.id);
   if (!limitCheck.allowed) {
     return flashAndRedirect(
@@ -2903,7 +2938,7 @@ app.post("/app/products/:id/duplicate", requireAuth, (req, res) => {
 });
 
 app.get("/app/preview", requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   ensureBusinessHoursRows(business.id);
   const hours = getBusinessHours(business.id);
   const openStatus = businessOpenStatus(business, hours);
@@ -2921,7 +2956,7 @@ app.get("/app/preview", requireAuth, (req, res) => {
 });
 
 app.get("/app/qr", requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const menuUrl = `${BASE_URL}/${business.slug}`;
   const qrDataUrl = await QRCode.toDataURL(menuUrl, { width: 380, margin: 1 });
 
@@ -2935,7 +2970,7 @@ app.get("/app/qr", requireAuth, async (req, res) => {
 });
 
 app.get("/app/qr/download", requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.user.id);
+  const business = req.business;
   const menuUrl = `${BASE_URL}/${business.slug}`;
   const pngBuffer = await QRCode.toBuffer(menuUrl, { width: 800, margin: 1 });
 

@@ -1,5 +1,82 @@
 # CHANGELOG
 
+## 2026-02-20 - Panel Comercio QA/Debug (estabilidad)
+
+### Errores encontrados
+
+1. Riesgo de crash en rutas del panel por `business` nulo.
+- Causa: multiples rutas `/app/*` accedian a `business.id` sin validar contexto cargado.
+- Impacto: errores 500/pantallas en blanco y redirecciones inconsistentes.
+
+2. Inconsistencias en rutas del panel (`/panel/*`) con aliases en espanol.
+- Causa: redireccion generica a `/app/:section` sin mapear rutas equivalentes reales.
+- Impacto: posibles 404 o navegacion erratica para enlaces viejos/bookmarks.
+
+3. Billing accesible con `requireAuth` generico.
+- Causa: la ruta permitia roles no comercio y podia terminar en estados incoherentes.
+- Impacto: errores de contexto y flujo confuso.
+
+### Soluciones aplicadas
+
+1. Middleware de contexto de comercio centralizado.
+- Nuevo `ensureCommerceBusinessContext` para resolver y adjuntar `req.business`.
+- Se aplica en `/app` y `/panel` junto al guard de suscripcion.
+- Resultado: todas las pantallas del panel leen el mismo contexto y evitan null crashes.
+
+2. Refactor de rutas del panel para usar `req.business`.
+- Reemplazo de lecturas repetidas de `getBusinessByUserId(...)` en handlers del panel.
+- Cobertura: dashboard, mi comercio, delivery settings, horarios, categorias, productos, zonas, metodos de pago, preview, QR.
+
+3. Guard de billing endurecido para COMMERCE.
+- `/billing` ahora usa `requireRole("COMMERCE")` + contexto de comercio.
+- `/app/plans/:id/checkout` tambien exige rol COMMERCE.
+
+4. Compatibilidad de aliases `/panel/*` y `/app/*`.
+- Mapeos agregados:
+  - `/panel/mi-comercio` -> `/app/business`
+  - `/panel/categorias` -> `/app/categories`
+  - `/panel/productos` -> `/app/products`
+  - `/panel/zonas-envio` -> `/app/delivery-zones`
+  - `/panel/metodos-pago` -> `/app/payment-methods`
+  - `/panel/horarios` -> `/app/business-hours`
+  - `/panel/vista-previa` -> `/app/preview`
+  - `/panel/billing` -> `/billing`
+- Alias equivalentes en `/app/*` para compatibilidad (ej. `/app/zonas-envio`).
+
+### Archivos modificados
+
+- `server.js`
+
+### Validaciones ejecutadas
+
+- `npm run build`: OK
+- `npm run lint`: OK
+- `npm test`: OK (`Smoke test OK`)
+- Prueba de navegacion autenticada por HTTP (commerce demo): OK en
+  - `/app`
+  - `/app/business`
+  - `/app/delivery-settings`
+  - `/app/categories`
+  - `/app/products`
+  - `/app/delivery-zones`
+  - `/app/payment-methods`
+  - `/app/business-hours`
+  - `/app/preview`
+  - `/app/qr`
+  - `/billing`
+
+### Checklist manual solicitado (estado)
+
+- Crear/editar/eliminar categoria: Pendiente validacion visual final en navegador.
+- Crear/editar/eliminar producto: Pendiente validacion visual final en navegador.
+- Marcar agotado/visible/destacado: Pendiente validacion visual final en navegador.
+- Agregar zona + editar precio + desactivar: Pendiente validacion visual final en navegador.
+- Configurar metodos de pago + alias/cvu + vuelto: Pendiente validacion visual final en navegador.
+- Configurar horarios + cerrado temporal: Pendiente validacion visual final en navegador.
+- Generar QR: Validado por endpoint/pagina sin crash.
+- Vista previa del menu: Validado por endpoint/pagina sin crash.
+- Billing pending/active: Validado render de `/billing` sin crash; estado funcional depende de datos de suscripcion.
+
 ## 2026-02-20 - QA + Stabilization Pass
 
 ### Bugs encontrados y corregidos
