@@ -314,6 +314,14 @@ document.addEventListener("click", async (event) => {
     return id;
   }
 
+  function toAmount(value) {
+    if (value === null || value === undefined || value === "") return 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    const normalized = String(value).replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   function currentZone() {
     const zoneId = Number(zoneField.value || 0);
     if (!zoneId) return null;
@@ -325,13 +333,13 @@ document.addEventListener("click", async (event) => {
   }
 
   function effectiveMinimum(zone) {
-    if (zone && Number(zone.minimum_order_amount || 0) > 0) return Number(zone.minimum_order_amount);
-    return Number(generalMinimum || 0);
+    if (zone && toAmount(zone.minimum_order_amount) > 0) return toAmount(zone.minimum_order_amount);
+    return toAmount(generalMinimum || 0);
   }
 
   function effectiveFreeOver(zone) {
-    if (zone && Number(zone.free_delivery_over_amount || 0) > 0) return Number(zone.free_delivery_over_amount);
-    return Number(generalFreeOver || 0);
+    if (zone && toAmount(zone.free_delivery_over_amount) > 0) return toAmount(zone.free_delivery_over_amount);
+    return toAmount(generalFreeOver || 0);
   }
 
   function deliverySummary() {
@@ -343,10 +351,10 @@ document.addEventListener("click", async (event) => {
     const subtotal = calcSubtotal();
     const minimum = effectiveMinimum(zone);
     const freeOver = effectiveFreeOver(zone);
-    let shipping = zone ? Number(zone.price || 0) : 0;
+    let shipping = zone ? toAmount(zone.price || 0) : 0;
     let freeApplied = false;
 
-    if (freeOver > 0 && subtotal >= freeOver) {
+    if (freeOver > 0 && shipping > 0 && subtotal >= freeOver) {
       shipping = 0;
       freeApplied = true;
     }
