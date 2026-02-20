@@ -1795,6 +1795,7 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
     }
     if (!plan) return res.status(400).json({ ok: false, message: "Plan invalido." });
     if (!MP_ACCESS_TOKEN) return res.status(503).json({ ok: false, message: "Pasarela no configurada." });
+    const expectedAmount = normalizeMoneyValue(plan.price_ars ?? plan.price);
 
     const currentPending = pendingSubscriptionForBusiness(business.id);
     if (currentPending) {
@@ -1806,7 +1807,14 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
            LIMIT 1`
         )
         .get(currentPending.id);
-      if (existingPayment && currentPending.plan_id === plan.id) {
+      const pendingAmount = normalizeMoneyValue(currentPending.amount);
+      const paymentAmount = normalizeMoneyValue(existingPayment?.amount);
+      if (
+        existingPayment &&
+        currentPending.plan_id === plan.id &&
+        pendingAmount === expectedAmount &&
+        paymentAmount === expectedAmount
+      ) {
         return res.json({ ok: true, checkout_url: existingPayment.checkout_url, subscription_id: currentPending.id });
       }
     }
@@ -1819,8 +1827,8 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
            (business_id, plan_id, amount, status, payment_provider, created_at, updated_at)
            VALUES (?, ?, ?, 'PENDING_PAYMENT', 'mercadopago', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
         )
-        .run(business.id, plan.id, normalizeMoneyValue(plan.price_ars ?? plan.price));
-      seedSubscription = { id: Number(created.lastInsertRowid), amount: normalizeMoneyValue(plan.price_ars ?? plan.price) };
+        .run(business.id, plan.id, expectedAmount);
+      seedSubscription = { id: Number(created.lastInsertRowid), amount: expectedAmount };
     }
 
     const externalReference = `sub:${seedSubscription.id}|biz:${business.id}|plan:${planCode}`;
@@ -1828,7 +1836,7 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
       createMercadoPagoPreference({
         subscription: {
           id: seedSubscription.id,
-          amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
+          amount: expectedAmount,
           external_reference: externalReference,
         },
         plan,
