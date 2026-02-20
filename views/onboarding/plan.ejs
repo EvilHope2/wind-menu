@@ -9,6 +9,10 @@
     <%- include("../partials/flash") %>
     <h1>Elegi tu plan</h1>
     <p class="muted">Activa tu panel y publica tu menu con carrito + checkout por WhatsApp.</p>
+    <label class="checkbox">
+      <input type="checkbox" id="onboarding-legal-check" />
+      <span>Confirmo que lei y acepto los <a class="link" href="/terminos" target="_blank">Terminos</a> y la <a class="link" href="/privacidad" target="_blank">Politica de Privacidad</a>.</span>
+    </label>
     <div class="plan-grid">
       <% plans.forEach((plan) => { %>
         <article class="plan <%= String(plan.code).toUpperCase() === 'PREMIUM' ? 'featured' : '' %>">
@@ -44,13 +48,14 @@
 <script>
   const planButtons = document.querySelectorAll(".js-plan-btn");
   const planError = document.getElementById("plan-error");
+  const legalCheck = document.getElementById("onboarding-legal-check");
   async function selectPlan(code, planId) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch("/api/onboarding/select-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan_code: code, plan_id: planId }),
+      body: JSON.stringify({ plan_code: code, plan_id: planId, accept_legal_checkout: legalCheck && legalCheck.checked ? 1 : 0 }),
       signal: controller.signal
     });
     clearTimeout(timeout);
@@ -70,6 +75,10 @@
 
   for (const button of planButtons) {
     button.addEventListener("click", async () => {
+      if (!legalCheck || !legalCheck.checked) {
+        if (planError) planError.textContent = "Debes aceptar Terminos y Privacidad para continuar.";
+        return;
+      }
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "Preparando checkout...";

@@ -98,3 +98,58 @@
 - `npm run build`: OK
 - `npm run lint`: OK
 - `npm test`: OK (`Smoke test OK`)
+
+## 2026-02-20 - Legal Docs + Consent System
+
+### Implementado
+
+1. Paginas legales publicas:
+- `/terminos`
+- `/privacidad`
+- `/cookies`
+- `/reembolsos`
+
+2. Versionado central de documentos:
+- Archivo `src/legal.js` con versiones, fechas de vigencia y datos editables de empresa.
+
+3. Consentimiento obligatorio:
+- Registro comercio: checkbox obligatorio.
+- Checkout de planes: confirmacion legal obligatoria.
+- Reaceptacion forzada al iniciar sesion si cambia version legal.
+
+4. Registro de consentimiento en DB:
+- Tabla `legal_consents` con usuario, rol, versiones, fecha, IP, user-agent y origen.
+
+5. Pantallas y rutas de gestion:
+- `/legal/accept` para aceptar versiones vigentes.
+- `/settings/legal` para ver historial de consentimientos.
+- Admin: `/admin/legal-consents` y export `/admin/legal-consents.csv`.
+
+6. Links legales en UI:
+- Landing, onboarding, menu publico, panel comercio, nav admin y nav afiliado.
+
+### Archivos tocados
+
+- `server.js`
+- `src/db.js`
+- `src/sync/bridge.js`
+- `supabase/schema.sql`
+- `src/legal.js`
+- `views/legal/terminos.ejs`
+- `views/legal/privacidad.ejs`
+- `views/legal/cookies.ejs`
+- `views/legal/reembolsos.ejs`
+- `views/legal/accept.ejs`
+- `views/settings/legal.ejs`
+- `views/auth-register.ejs`
+- `views/onboarding/plan.ejs`
+- `views/onboarding/welcome.ejs`
+- `views/onboarding/checkout.ejs`
+- `views/app/plans.ejs`
+- `views/landing.ejs`
+- `views/partials/public-menu-content.ejs`
+- `views/partials/app-sidebar.ejs`
+- `views/partials/admin-nav.ejs`
+- `views/partials/affiliate-nav.ejs`
+- `views/admin/legal-consents.ejs`
+- `scripts/smoke-test.js`

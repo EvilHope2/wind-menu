@@ -1,0 +1,32 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing">
+  <%- include("../partials/admin-nav") %>
+  <section class="how">
+    <section class="card">
+      <h1>Consentimientos legales</h1>
+      <p class="muted">Version vigente TyC <%= legal.terms.version %> | Privacidad <%= legal.privacy.version %></p>
+      <a class="btn btn-ghost" href="/admin/legal-consents.csv">Exportar CSV</a>
+    </section>
+    <section class="card">
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Usuario</th><th>Rol</th><th>TyC</th><th>Privacidad</th><th>Origen</th><th>IP</th></tr></thead>
+          <tbody>
+            <% rows.forEach((r) => { %>
+              <tr>
+                <td><%= r.accepted_at %></td>
+                <td><strong><%= r.full_name %></strong><small><%= r.email %></small></td>
+                <td><%= r.role %></td>
+                <td><%= r.terms_version %></td>
+                <td><%= r.privacy_version %></td>
+                <td><%= r.source || '-' %></td>
+                <td><%= r.ip_address || '-' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

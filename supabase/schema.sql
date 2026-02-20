@@ -11,6 +11,19 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.legal_consents (
+  id bigserial primary key,
+  user_id bigint not null references public.users(id) on delete cascade,
+  role text not null,
+  terms_version text not null,
+  privacy_version text not null,
+  accepted_at timestamptz not null default now(),
+  ip_address text,
+  user_agent text,
+  source text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.affiliates (
   id bigserial primary key,
   user_id bigint not null unique references public.users(id) on delete cascade,
@@ -196,6 +209,7 @@ create index if not exists idx_delivery_zones_business_id on public.delivery_zon
 create index if not exists idx_business_hours_business_id on public.business_hours(business_id);
 create index if not exists idx_affiliate_sales_affiliate_id on public.affiliate_sales(affiliate_id);
 create index if not exists idx_affiliate_sales_status on public.affiliate_sales(status);
+create index if not exists idx_legal_consents_user_id on public.legal_consents(user_id);
 
 alter table if exists public.subscriptions add column if not exists payment_provider text;
 alter table if exists public.subscriptions add column if not exists provider_preference_id text;

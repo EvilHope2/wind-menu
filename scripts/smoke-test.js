@@ -106,6 +106,7 @@ async function main() {
           whatsapp: "5491100000001",
           email: `qa_${stamp}@example.com`,
           password: "qa123456",
+          accept_legal: "1",
         }),
       },
       commerceCookie

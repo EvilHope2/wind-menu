@@ -13,6 +13,7 @@ const { upload } = require("./src/middleware/upload");
 const { slugify, uniqueSlug } = require("./src/utils/slug");
 const { pushSqliteToSupabase, pullSupabaseToSqlite } = require("./src/sync/bridge");
 const { applySupabaseSchema } = require("./src/sync/schema");
+const { LEGAL_VERSIONS, LEGAL_COMPANY } = require("./src/legal");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -105,6 +106,8 @@ app.use(
 app.use((req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.flash = req.session.flash || null;
+  res.locals.legal = LEGAL_VERSIONS;
+  res.locals.legalCompany = LEGAL_COMPANY;
   req.session.flash = null;
   next();
 });
@@ -129,6 +132,44 @@ if (IS_VERCEL) {
     }
   });
 }
+
+app.use((req, res, next) => {
+  const user = req.session?.user;
+  if (!user) return next();
+
+  const role = user.role || "COMMERCE";
+  if (!["COMMERCE", "AFFILIATE"].includes(role)) return next();
+
+  const openPaths = [
+    "/terminos",
+    "/privacidad",
+    "/cookies",
+    "/reembolsos",
+    "/legal/accept",
+    "/logout",
+    "/login",
+    "/register",
+    "/registro",
+    "/support",
+  ];
+
+  if (openPaths.some((path) => req.path === path || req.path.startsWith(`${path}/`))) {
+    return next();
+  }
+
+  if (req.path.startsWith("/public") || req.path.startsWith("/uploads") || req.path.startsWith("/r/")) {
+    return next();
+  }
+
+  const hasConsent = hasLatestLegalConsent(user.id, role);
+  if (hasConsent) return next();
+
+  req.session.flash = {
+    type: "error",
+    text: "Necesitas aceptar los Terminos y la Politica de Privacidad vigentes para continuar.",
+  };
+  return res.redirect("/legal/accept");
+});
 
 function flashAndRedirect(req, res, type, text, to) {
   req.session.flash = { type, text };
@@ -203,6 +244,56 @@ function setCookie(res, name, value, maxAgeSeconds) {
 
 function clearCookie(res, name) {
   res.append("Set-Cookie", `${encodeURIComponent(name)}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`);
+}
+
+function currentLegalVersions() {
+  return {
+    terms: LEGAL_VERSIONS.terms.version,
+    privacy: LEGAL_VERSIONS.privacy.version,
+  };
+}
+
+function hasLatestLegalConsent(userId, role) {
+  const versions = currentLegalVersions();
+  const row = db
+    .prepare(
+      `SELECT id
+       FROM legal_consents
+       WHERE user_id = ? AND role = ? AND terms_version = ? AND privacy_version = ?
+       ORDER BY accepted_at DESC, id DESC
+       LIMIT 1`
+    )
+    .get(userId, role, versions.terms, versions.privacy);
+  return Boolean(row);
+}
+
+function latestLegalConsentByUser(userId) {
+  return db
+    .prepare(
+      `SELECT *
+       FROM legal_consents
+       WHERE user_id = ?
+       ORDER BY accepted_at DESC, id DESC
+       LIMIT 1`
+    )
+    .get(userId);
+}
+
+function recordLegalConsent(req, { userId, role, source }) {
+  const versions = currentLegalVersions();
+  db.prepare(
+    `INSERT INTO legal_consents
+     (user_id, role, terms_version, privacy_version, accepted_at, ip_address, user_agent, source, created_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).run(
+    userId,
+    role,
+    versions.terms,
+    versions.privacy,
+    String(req.ip || "").trim() || null,
+    String(req.headers["user-agent"] || "").slice(0, 255) || null,
+    source || null
+  );
 }
 
 function getBusinessByUserId(userId) {
@@ -917,6 +1008,15 @@ app.post("/register", async (req, res) => {
       "/register"
     );
   }
+  if (!req.body.accept_legal) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Debes aceptar los Terminos y la Politica de Privacidad para crear la cuenta.",
+      "/register"
+    );
+  }
 
   const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(cleanEmail);
   if (existing) {
@@ -961,6 +1061,12 @@ app.post("/register", async (req, res) => {
     email: cleanEmail,
     role: "COMMERCE",
   };
+
+  recordLegalConsent(req, {
+    userId: userResult.lastInsertRowid,
+    role: "COMMERCE",
+    source: "registration",
+  });
 
   clearCookie(res, "windi_ref_code");
   if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
@@ -1044,6 +1150,103 @@ app.get("/support", (_req, res) => {
   res.status(200).send("Soporte Windi Menu: hola@windimenu.com");
 });
 
+app.get("/terminos", (_req, res) => {
+  res.render("legal/terminos", {
+    title: "Terminos y Condiciones | Windi Menu",
+    legal: LEGAL_VERSIONS,
+    company: LEGAL_COMPANY,
+  });
+});
+
+app.get("/privacidad", (_req, res) => {
+  res.render("legal/privacidad", {
+    title: "Politica de Privacidad | Windi Menu",
+    legal: LEGAL_VERSIONS,
+    company: LEGAL_COMPANY,
+  });
+});
+
+app.get("/cookies", (_req, res) => {
+  res.render("legal/cookies", {
+    title: "Politica de Cookies | Windi Menu",
+    legal: LEGAL_VERSIONS,
+    company: LEGAL_COMPANY,
+  });
+});
+
+app.get("/reembolsos", (_req, res) => {
+  res.render("legal/reembolsos", {
+    title: "Reembolsos y Cancelaciones | Windi Menu",
+    legal: LEGAL_VERSIONS,
+    company: LEGAL_COMPANY,
+  });
+});
+
+app.get("/legal/accept", requireAuth, (req, res) => {
+  const role = req.session.user.role || "COMMERCE";
+  if (!["COMMERCE", "AFFILIATE"].includes(role)) return res.redirect("/");
+  if (hasLatestLegalConsent(req.session.user.id, role)) {
+    if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
+    const business = resolveBusinessForUser(req.session.user.id);
+    if (!business) return renderBusinessProvisioning(res);
+    const gate = resolveCommerceGate(business.id);
+    return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
+  }
+  res.render("legal/accept", {
+    title: "Aceptar terminos legales | Windi Menu",
+    legal: LEGAL_VERSIONS,
+    source: String(req.query.source || "settings"),
+  });
+});
+
+app.post("/legal/accept", requireAuth, (req, res) => {
+  const role = req.session.user.role || "COMMERCE";
+  if (!["COMMERCE", "AFFILIATE"].includes(role)) return res.redirect("/");
+
+  if (!req.body.accept_legal) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Debes aceptar los Terminos y la Politica de Privacidad para continuar.",
+      "/legal/accept"
+    );
+  }
+
+  recordLegalConsent(req, {
+    userId: req.session.user.id,
+    role,
+    source: String(req.body.source || "settings"),
+  });
+
+  if (role === "AFFILIATE") {
+    return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/affiliate/dashboard");
+  }
+  const business = resolveBusinessForUser(req.session.user.id);
+  if (!business) return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/onboarding/plan");
+  const gate = resolveCommerceGate(business.id);
+  return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", gate.allowed ? "/app" : gate.redirectTo);
+});
+
+app.get("/settings/legal", requireAuth, (req, res) => {
+  const role = req.session.user.role || "COMMERCE";
+  const consents = db
+    .prepare(
+      `SELECT accepted_at, role, terms_version, privacy_version, source
+       FROM legal_consents
+       WHERE user_id = ?
+       ORDER BY accepted_at DESC, id DESC`
+    )
+    .all(req.session.user.id);
+
+  res.render("settings/legal", {
+    title: "Consentimiento legal | Windi Menu",
+    consents,
+    legal: LEGAL_VERSIONS,
+    activePage: role === "COMMERCE" ? "settings-legal" : "",
+  });
+});
+
 app.get("/onboarding/welcome", requireRole("COMMERCE"), async (req, res) => {
   const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
   if (!business) return renderBusinessProvisioning(res);
@@ -1107,6 +1310,16 @@ app.get("/onboarding/checkout", requireRole("COMMERCE"), async (req, res) => {
 
 app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res) => {
   try {
+    if (!req.body.accept_legal_checkout) {
+      return res.status(400).json({ ok: false, message: "Debes confirmar terminos y privacidad para pagar." });
+    }
+    if (!hasLatestLegalConsent(req.session.user.id, "COMMERCE")) {
+      return res.status(403).json({
+        ok: false,
+        message: "Debes aceptar Terminos y Privacidad antes de continuar.",
+        redirect_to: "/legal/accept?source=checkout",
+      });
+    }
     const business = getBusinessByUserId(req.session.user.id);
     if (!business) return res.status(400).json({ ok: false, message: "Comercio no encontrado." });
     const gate = resolveCommerceGate(business.id);
@@ -1408,6 +1621,24 @@ app.get(["/app/plans", "/billing"], requireAuth, (req, res) => {
 });
 
 app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
+  if (!req.body.accept_legal_checkout) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Debes confirmar terminos y privacidad para continuar.",
+      "/billing"
+    );
+  }
+  if (!hasLatestLegalConsent(req.session.user.id, "COMMERCE")) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Debes aceptar Terminos y Privacidad para continuar con la compra.",
+      "/legal/accept?source=checkout"
+    );
+  }
   const business = getBusinessByUserId(req.session.user.id);
   const user = db.prepare("SELECT id, email, full_name FROM users WHERE id = ?").get(req.session.user.id);
   const planId = Number(req.params.id);
@@ -2201,6 +2432,68 @@ app.get("/affiliate/referrals", requireRole("AFFILIATE"), (req, res) => {
 
 app.get("/admin", requireRole("ADMIN"), (_req, res) => {
   res.redirect("/admin/affiliate-sales");
+});
+
+app.get("/admin/legal-consents", requireRole("ADMIN"), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.*, u.email, u.full_name
+       FROM legal_consents c
+       JOIN users u ON u.id = c.user_id
+       ORDER BY c.accepted_at DESC, c.id DESC
+       LIMIT 500`
+    )
+    .all();
+  res.render("admin/legal-consents", {
+    title: "Consentimientos legales | Windi Menu",
+    rows,
+    legal: LEGAL_VERSIONS,
+  });
+});
+
+app.get("/admin/legal-consents.csv", requireRole("ADMIN"), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.*, u.email, u.full_name
+       FROM legal_consents c
+       JOIN users u ON u.id = c.user_id
+       ORDER BY c.accepted_at DESC, c.id DESC
+       LIMIT 5000`
+    )
+    .all();
+  const header = [
+    "id",
+    "user_id",
+    "email",
+    "full_name",
+    "role",
+    "terms_version",
+    "privacy_version",
+    "accepted_at",
+    "ip_address",
+    "user_agent",
+    "source",
+  ];
+  const lines = [header.join(",")];
+  for (const row of rows) {
+    const values = [
+      row.id,
+      row.user_id,
+      row.email,
+      row.full_name,
+      row.role,
+      row.terms_version,
+      row.privacy_version,
+      row.accepted_at,
+      row.ip_address || "",
+      row.user_agent || "",
+      row.source || "",
+    ].map((value) => `"${String(value).replace(/"/g, '""')}"`);
+    lines.push(values.join(","));
+  }
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=legal-consents.csv");
+  return res.send(lines.join("\n"));
 });
 
 app.get("/admin/affiliates", requireRole("ADMIN"), (req, res) => {

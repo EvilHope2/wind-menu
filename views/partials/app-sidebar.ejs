@@ -19,6 +19,9 @@
     <a class="<%= activePage === 'business-hours' ? 'active' : '' %>" href="/app/business-hours"><i data-lucide="clock-3"></i>Horarios y estado</a>
     <a class="<%= activePage === 'preview' ? 'active' : '' %>" href="/app/preview"><i data-lucide="eye"></i>Vista previa</a>
     <a class="<%= activePage === 'qr' ? 'active' : '' %>" href="/app/qr"><i data-lucide="qr-code"></i>QR del menu</a>
+    <a class="<%= activePage === 'settings-legal' ? 'active' : '' %>" href="/settings/legal"><i data-lucide="shield-check"></i>Legal y consent.</a>
+    <a href="/terminos" target="_blank"><i data-lucide="file-text"></i>Terminos</a>
+    <a href="/privacidad" target="_blank"><i data-lucide="lock"></i>Privacidad</a>
   </nav>
   <form action="/logout" method="post" class="logout-form">
     <button class="btn btn-ghost" type="submit"><i data-lucide="log-out"></i>Cerrar sesion</button>

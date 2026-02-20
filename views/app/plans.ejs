@@ -65,6 +65,10 @@
           <p class="price">$<%= targetPrice.toLocaleString("es-AR") %></p>
           <p class="muted">Max productos: <%= plan.max_products === null || plan.max_products === undefined ? 'Ilimitado' : plan.max_products %></p>
           <form method="post" action="/app/plans/<%= plan.id %>/checkout">
+            <label class="checkbox">
+              <input type="checkbox" name="accept_legal_checkout" value="1" required />
+              <span>Acepto <a class="link" href="/terminos" target="_blank">Terminos</a> y <a class="link" href="/privacidad" target="_blank">Privacidad</a>.</span>
+            </label>
             <button class="btn btn-primary" type="submit" <%= mercadopagoReady ? '' : 'disabled' %>>
               <% if (isCurrent) { %>
                 Renovar plan

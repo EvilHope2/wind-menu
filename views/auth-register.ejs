@@ -27,6 +27,10 @@
         <label>WhatsApp<input type="text" name="whatsapp" required /></label>
         <label>Correo<input type="email" name="email" required /></label>
         <label>Contrasena (min 6)<input type="password" name="password" required minlength="6" /></label>
+        <label class="checkbox">
+          <input type="checkbox" name="accept_legal" value="1" required />
+          <span>He leido y acepto los <a class="link" href="/terminos" target="_blank">Terminos y Condiciones</a> y la <a class="link" href="/privacidad" target="_blank">Politica de Privacidad</a>.</span>
+        </label>
         <button class="btn btn-primary" type="submit"><i data-lucide="rocket"></i>Crear mi menu</button>
       </form>
       <p class="muted">Ya tenes cuenta? <a class="link" href="/login">Iniciar sesion</a></p>

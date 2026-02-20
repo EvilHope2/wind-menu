@@ -1,0 +1,29 @@
+<%- include("../partials/head", { title }) %>
+<main class="auth-wrap">
+  <section class="auth-card">
+    <article class="auth-side">
+      <div>
+        <p class="pill">Actualizacion legal</p>
+        <h2>Necesitamos tu aceptacion</h2>
+        <p>Para continuar, acepta Terminos y Politica vigentes.</p>
+      </div>
+      <p class="muted">Versiones actuales: TyC <%= legal.terms.version %> | Privacidad <%= legal.privacy.version %></p>
+    </article>
+    <article class="card">
+      <h1>Aceptacion obligatoria</h1>
+      <%- include("../partials/flash") %>
+      <form method="post" action="/legal/accept" class="form">
+        <input type="hidden" name="source" value="<%= source || 'settings' %>" />
+        <label class="checkbox">
+          <input type="checkbox" name="accept_legal" value="1" required />
+          <span>He leido y acepto los <a class="link" href="/terminos" target="_blank">Terminos y Condiciones</a> y la <a class="link" href="/privacidad" target="_blank">Politica de Privacidad</a>.</span>
+        </label>
+        <button class="btn btn-primary" type="submit">Aceptar y continuar</button>
+      </form>
+      <form method="post" action="/logout">
+        <button class="btn btn-ghost" type="submit">Cerrar sesion</button>
+      </form>
+    </article>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

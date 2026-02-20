@@ -30,6 +30,20 @@ function initDb() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS legal_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      terms_version TEXT NOT NULL,
+      privacy_version TEXT NOT NULL,
+      accepted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ip_address TEXT,
+      user_agent TEXT,
+      source TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS businesses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL UNIQUE,
@@ -241,6 +255,7 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_affiliate_sales_status ON affiliate_sales(status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliate_sales_subscription_unique ON affiliate_sales(subscription_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_payment_unique ON payments(provider_payment_id);
+    CREATE INDEX IF NOT EXISTS idx_legal_consents_user_id ON legal_consents(user_id);
   `);
 
   const businessColumns = db.prepare("PRAGMA table_info(businesses)").all();

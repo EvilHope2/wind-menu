@@ -1,0 +1,25 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing legal-page">
+  <header class="topbar">
+    <a href="/" class="logo">Windi Menu</a>
+    <div class="top-actions">
+      <a class="btn btn-ghost" href="/terminos">Terminos</a>
+      <a class="btn btn-ghost" href="/privacidad">Privacidad</a>
+    </div>
+  </header>
+
+  <section class="card">
+    <h1>Politica de Reembolsos y Cancelaciones</h1>
+    <p class="muted">Version <%= legal.refunds.version %> | Vigencia <%= legal.refunds.effective_date %></p>
+    <p class="tag">Plantilla editable. Definir condiciones finales con asesoria legal y contable.</p>
+    <h2>Cancelacion de plan</h2>
+    <p>El comercio puede solicitar baja/cambio de plan desde soporte o panel (segun disponibilidad).</p>
+    <h2>Reembolsos</h2>
+    <p>Los reembolsos, si corresponden, se evaluan segun fecha de cobro, uso efectivo y politicas anti-fraude.</p>
+    <h2>Contracargos</h2>
+    <p>Ante contracargos o fraude, la suscripcion puede pasar a estado vencido/cancelado y aplicarse ajustes en afiliados.</p>
+    <h2>Plazos</h2>
+    <p>Cuando aplique reembolso, la acreditacion depende del medio de pago y del procesador.</p>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

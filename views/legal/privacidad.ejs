@@ -1,0 +1,45 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing legal-page">
+  <header class="topbar">
+    <a href="/" class="logo">Windi Menu</a>
+    <div class="top-actions">
+      <a class="btn btn-ghost" href="/terminos">Terminos</a>
+      <a class="btn btn-ghost" href="/cookies">Cookies</a>
+      <a class="btn btn-ghost" href="/reembolsos">Reembolsos</a>
+    </div>
+  </header>
+
+  <section class="card">
+    <h1>Politica de Privacidad</h1>
+    <p class="muted">Version <%= legal.privacy.version %> | Vigencia <%= legal.privacy.effective_date %> | Actualizado <%= legal.privacy.updated_at %></p>
+    <p class="tag">Plantilla legal editable. Revisar con asesor legal antes de publicacion final.</p>
+  </section>
+
+  <section class="card">
+    <h2>1. Datos que recolectamos</h2>
+    <p>Datos de comercios y afiliados (nombre, email, WhatsApp, datos de negocio) y datos de clientes finales ingresados en pedidos (nombre, direccion, zona, observaciones).</p>
+    <h2>2. Finalidades</h2>
+    <p>Operacion del servicio, soporte, seguridad, facturacion, cumplimiento y mejoras del producto.</p>
+    <h2>3. Base legal</h2>
+    <p>Consentimiento del usuario, ejecucion del contrato y cumplimiento de obligaciones legales aplicables.</p>
+    <h2>4. Comparticion de datos</h2>
+    <p>Podemos compartir datos con proveedores tecnologicos (hosting), Mercado Pago para cobros y WhatsApp como canal de comunicacion.</p>
+    <h2>5. Retencion</h2>
+    <p>Conservamos datos durante la relacion contractual y por plazos razonables para soporte, auditoria y obligaciones legales.</p>
+    <h2>6. Seguridad</h2>
+    <p>Aplicamos medidas tecnicas y organizativas razonables para proteger la informacion.</p>
+    <h2>7. Derechos de titulares</h2>
+    <p>Podes solicitar acceso, rectificacion o supresion escribiendo a <%= company.support_email %>.</p>
+    <h2>8. Cookies</h2>
+    <p>Consulta la politica de cookies en <a class="link" href="/cookies">/cookies</a>.</p>
+    <h2>9. Menores</h2>
+    <p>El servicio no esta dirigido a menores de edad sin autorizacion legal.</p>
+    <h2>10. Transferencias internacionales</h2>
+    <p>Si proveedores externos operan fuera de Argentina, se aplicaran salvaguardas razonables.</p>
+    <h2>11. Cambios de politica</h2>
+    <p>Podemos actualizar esta politica por version y fecha de vigencia.</p>
+    <h2>12. Contacto</h2>
+    <p>Responsable de contacto: <%= company.platform_name %> | <%= company.support_email %></p>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

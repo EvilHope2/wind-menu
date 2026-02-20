@@ -1,0 +1,66 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing legal-page">
+  <header class="topbar">
+    <a href="/" class="logo">Windi Menu</a>
+    <div class="top-actions">
+      <a class="btn btn-ghost" href="/privacidad">Privacidad</a>
+      <a class="btn btn-ghost" href="/cookies">Cookies</a>
+      <a class="btn btn-ghost" href="/reembolsos">Reembolsos</a>
+    </div>
+  </header>
+
+  <section class="card">
+    <h1>Terminos y Condiciones</h1>
+    <p class="muted">Version <%= legal.terms.version %> | Vigencia <%= legal.terms.effective_date %> | Actualizado <%= legal.terms.updated_at %></p>
+    <p class="tag">Plantilla legal editable. Revisar con asesor legal antes de publicacion final.</p>
+  </section>
+
+  <section class="card">
+    <h2>Resumen simple</h2>
+    <ul>
+      <li>Somos proveedor de software; el comercio es responsable de sus productos, precios y entregas.</li>
+      <li>Los pedidos se envian por WhatsApp al comercio.</li>
+      <li>Los planes pueden cambiar y se cobran en ARS mediante Mercado Pago.</li>
+      <li>Afiliados: comision 25% con aprobacion manual y liquidacion semanal.</li>
+      <li>Podemos suspender cuentas por uso indebido o fraude.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>1. Identificacion del servicio</h2>
+    <p><strong><%= company.platform_name %></strong> es operada por <%= company.legal_name %> (CUIT: <%= company.cuit %>), domicilio: <%= company.address %>.</p>
+    <h2>2. Aceptacion y capacidad legal</h2>
+    <p>Al usar la plataforma aceptas estos terminos y declaras capacidad legal suficiente para contratar.</p>
+    <h2>3. Descripcion del servicio</h2>
+    <p>La plataforma permite crear menu digital, carrito y envio de pedidos por WhatsApp al comercio.</p>
+    <h2>4. Cuenta y responsabilidades del comercio</h2>
+    <p>El comercio es responsable de la veracidad de datos, productos, precios, stock, horarios y atencion al cliente.</p>
+    <h2>5. Contenido del comercio</h2>
+    <p>El comercio garantiza que tiene derechos para usar imagenes, marcas y contenidos publicados.</p>
+    <h2>6. Uso permitido y prohibiciones</h2>
+    <p>Se prohibe uso fraudulento, spam, suplantacion, carga de contenido ilegal o vulneracion de seguridad.</p>
+    <h2>7. Planes, precios y facturacion</h2>
+    <p>Los planes son mensuales, en ARS, y pueden ser modificados con aviso razonable.</p>
+    <h2>8. Pagos con Mercado Pago</h2>
+    <p>El procesamiento de pagos se realiza mediante Mercado Pago, tercero independiente.</p>
+    <h2>9. Reembolsos y cancelaciones</h2>
+    <p>Aplican las condiciones publicadas en <a class="link" href="/reembolsos">/reembolsos</a>.</p>
+    <h2>10. Disponibilidad y mantenimiento</h2>
+    <p>Puede haber interrupciones por mantenimiento, incidentes tecnicos o fuerza mayor.</p>
+    <h2>11. Limitacion de responsabilidad</h2>
+    <p>No somos parte de la compraventa entre cliente final y comercio ni responsables por calidad de productos, envios o cumplimiento de pedidos.</p>
+    <h2>12. Propiedad intelectual</h2>
+    <p>El software y marca de la plataforma pertenecen al operador, salvo contenidos propios de cada comercio.</p>
+    <h2>13. Afiliados</h2>
+    <p>Comisiones del 25%, revision manual de ventas, pagos semanales y reversas por contracargos/fraude segun politicas internas.</p>
+    <h2>14. Suspensiones y terminacion</h2>
+    <p>Podemos suspender o terminar cuentas por incumplimientos graves, fraude o riesgo operativo.</p>
+    <h2>15. Modificaciones</h2>
+    <p>Estos terminos pueden actualizarse por version. Se solicitara nueva aceptacion cuando corresponda.</p>
+    <h2>16. Ley aplicable y jurisdiccion</h2>
+    <p>Se rige por leyes de <%= company.jurisdiction %>. Texto final sujeto a revision legal.</p>
+    <h2>17. Contacto</h2>
+    <p>Email: <%= company.support_email %> | WhatsApp: <%= company.support_whatsapp %></p>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

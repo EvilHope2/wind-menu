@@ -1,0 +1,25 @@
+<%- include("../partials/head", { title }) %>
+<main class="landing legal-page">
+  <header class="topbar">
+    <a href="/" class="logo">Windi Menu</a>
+    <div class="top-actions">
+      <a class="btn btn-ghost" href="/terminos">Terminos</a>
+      <a class="btn btn-ghost" href="/privacidad">Privacidad</a>
+    </div>
+  </header>
+
+  <section class="card">
+    <h1>Politica de Cookies</h1>
+    <p class="muted">Version <%= legal.cookies.version %> | Vigencia <%= legal.cookies.effective_date %></p>
+    <p>Usamos cookies necesarias para sesion y seguridad. Si incorporamos analitica o marketing, se informara y se habilitara gestion de consentimiento.</p>
+    <h2>Tipos de cookies</h2>
+    <ul>
+      <li>Necesarias: autenticacion y funcionamiento basico.</li>
+      <li>Analiticas: (si aplica) medicion de uso de la plataforma.</li>
+      <li>Marketing: (si aplica) personalizacion de campañas.</li>
+    </ul>
+    <h2>Como deshabilitar</h2>
+    <p>Podes gestionar cookies desde la configuracion de tu navegador.</p>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

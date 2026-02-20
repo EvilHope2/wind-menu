@@ -3,6 +3,7 @@ const { db, initDb } = require("../db");
 
 const TABLES_ORDER = [
   "users",
+  "legal_consents",
   "affiliates",
   "plans",
   "businesses",
