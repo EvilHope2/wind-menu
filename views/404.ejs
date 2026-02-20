@@ -1,9 +1,16 @@
-<%- include("partials/head", { title }) %>
-<main class="auth-wrap">
-  <section class="card" style="width:min(520px,100%)">
-    <h1>404</h1>
-    <p class="muted">No encontramos la pagina que buscas.</p>
-    <a class="btn btn-primary" href="/">Ir al inicio</a>
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+  <section class="card" style="max-width:680px;margin:24px auto">
+    <p class="pill">Error 404</p>
+    <h1>No encontramos esta pagina</h1>
+    <p class="muted">El enlace puede estar incompleto, vencido o con un error de escritura.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="/">Volver al inicio</a>
+      <a class="btn btn-secondary" href="/precios">Ver planes</a>
+    </div>
+    <p class="muted">Si estabas buscando un menu, revisa que el link del comercio este bien escrito.</p>
   </section>
+  <%- include("partials/public-footer") %>
 </main>
 <%- include("partials/scripts") %>

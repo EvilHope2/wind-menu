@@ -1,0 +1,24 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+
+  <section class="hero">
+    <div>
+      <p class="pill">Demo interactiva</p>
+      <h1>Prueba el menu como lo verian tus clientes</h1>
+      <p>Explora una demo con categorias, carrito, zonas de envio y metodos de pago.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/demo/menu">Ver demo de menu</a>
+        <a class="btn btn-ghost" href="/precios">Ver planes</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <p class="tag">Esto es una demo</p>
+    <p class="muted">Los datos son de prueba y no representan un comercio real.</p>
+  </section>
+
+  <%- include("partials/public-footer") %>
+</main>
+<%- include("partials/scripts") %>

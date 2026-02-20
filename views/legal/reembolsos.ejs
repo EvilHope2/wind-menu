@@ -1,12 +1,6 @@
 <%- include("../partials/head", { title }) %>
 <main class="landing legal-page">
-  <header class="topbar">
-    <a href="/" class="logo">Windi Menu</a>
-    <div class="top-actions">
-      <a class="btn btn-ghost" href="/terminos">Terminos</a>
-      <a class="btn btn-ghost" href="/privacidad">Privacidad</a>
-    </div>
-  </header>
+  <%- include("../partials/public-nav") %>
 
   <section class="card">
     <h1>Politica de Reembolsos y Cancelaciones</h1>
@@ -21,5 +15,6 @@
     <h2>Plazos</h2>
     <p>Cuando aplique reembolso, la acreditacion depende del medio de pago y del procesador.</p>
   </section>
+  <%- include("../partials/public-footer") %>
 </main>
 <%- include("../partials/scripts") %>

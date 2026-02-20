@@ -1,0 +1,59 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+
+  <section class="hero">
+    <div>
+      <p class="pill">Planes Windi Menu</p>
+      <h1>Menu digital con carrito y pedidos por WhatsApp</h1>
+      <p>Escoge el plan que mejor se adapte a tu comercio y escala cuando quieras.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/registro">Crear mi menu</a>
+        <a class="btn btn-secondary" href="/demo">Ver demo</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="plans">
+    <div class="plan-grid">
+      <article class="plan">
+        <h3>Basico</h3>
+        <p class="price">$12.999</p>
+        <ul>
+          <li>Hasta 10 productos</li>
+          <li>Carrito y WhatsApp</li>
+          <li>QR del menu</li>
+        </ul>
+      </article>
+      <article class="plan featured">
+        <p class="pill">Recomendado</p>
+        <h3>Premium</h3>
+        <p class="price">$16.999</p>
+        <ul>
+          <li>Hasta 50 productos</li>
+          <li>Zonas de envio y validaciones</li>
+          <li>Panel completo de gestion</li>
+        </ul>
+      </article>
+      <article class="plan">
+        <h3>Elite</h3>
+        <p class="price">$21.999</p>
+        <ul>
+          <li>Productos ilimitados</li>
+          <li>Mayor escalabilidad</li>
+          <li>Preparado para crecimiento</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="grid-4">
+    <article class="feature"><h3>Ideal para Basico</h3><p>Carritos de comida rapida o menus cortos.</p></article>
+    <article class="feature"><h3>Ideal para Premium</h3><p>Pizzerias, rotiserias y comercios con alta rotacion.</p></article>
+    <article class="feature"><h3>Ideal para Elite</h3><p>Negocios grandes y equipos con foco en marketing.</p></article>
+    <article class="feature"><h3>FAQ rapido</h3><p>Si, puedes cambiar de plan cuando quieras.</p></article>
+  </section>
+
+  <%- include("partials/public-footer") %>
+</main>
+<%- include("partials/scripts") %>

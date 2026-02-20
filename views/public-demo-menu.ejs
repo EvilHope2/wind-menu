@@ -1,0 +1,11 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+  <section class="card">
+    <p class="pill">Demo</p>
+    <h1>Menu de prueba</h1>
+    <p class="muted">Demo funcional con carrito y checkout WhatsApp de ejemplo.</p>
+  </section>
+  <%- include("partials/public-menu-content", { business, grouped, deliveryZones, paymentMethods, openStatus, previewMode: false }) %>
+</main>
+<%- include("partials/scripts") %>

@@ -1,78 +1,196 @@
-<%- include("partials/head", { title }) %>
-<main class="landing">
-  <header class="topbar">
-    <a href="/" class="logo"><i data-lucide="sparkles"></i>Windi Menu</a>
-    <div class="top-actions">
-      <a class="btn btn-ghost" href="/login"><i data-lucide="log-in"></i>Iniciar sesion</a>
-      <a class="btn btn-primary" href="/register"><i data-lucide="rocket"></i>Crear mi menu</a>
-    </div>
-  </header>
+<%- include("partials/head", { title, description: "Tu menu digital con carrito y pedidos por WhatsApp. Configura zonas de envio, metodos de pago y planes en minutos." }) %>
+<main class="landing landing-v2">
+  <%- include("partials/public-nav") %>
 
-  <section class="hero">
-    <div>
-      <p class="pill"><i data-lucide="zap"></i>Menus digitales para comercios modernos</p>
-      <h1>Vende mas con tu menu online, carrito y pedidos por WhatsApp</h1>
-      <p>
-        Crea tu tienda visual en minutos, define zonas, metodos de pago y horarios, y recibe pedidos listos
-        para cerrar sin depender de marketplaces.
+  <section class="lp-hero">
+    <div class="lp-hero-copy">
+      <p class="pill"><i data-lucide="sparkles"></i>SaaS para comercios gastronomicos</p>
+      <h1>Tu menu digital con carrito y pedidos por WhatsApp</h1>
+      <p class="lp-lead">
+        Tus clientes arman el pedido solos, calculan el envio y te llega listo por WhatsApp.
       </p>
       <div class="hero-actions">
-        <a class="btn btn-primary" href="/register"><i data-lucide="plus-circle"></i>Crear mi menu</a>
-        <a class="btn btn-secondary" href="/pizzeria9420"><i data-lucide="eye"></i>Ver demo</a>
+        <a class="btn btn-primary" href="/registro"><i data-lucide="rocket"></i>Crear mi menu</a>
+        <a class="btn btn-secondary" href="/demo"><i data-lucide="eye"></i>Ver demo</a>
+      </div>
+      <div class="lp-micro-benefits">
+        <article><i data-lucide="qr-code"></i><span>QR listo para imprimir</span></article>
+        <article><i data-lucide="map-pin"></i><span>Envio por zonas y total automatico</span></article>
+        <article><i data-lucide="credit-card"></i><span>Pago por efectivo, transferencia o tarjeta</span></article>
       </div>
     </div>
 
-    <article class="hero-card">
-      <h3>Tu negocio, tu link, tus reglas</h3>
+    <aside class="lp-hero-preview card">
+      <header>
+        <strong>Pizzeria Centro</strong>
+        <span class="tag tag-ok">Abierto ahora</span>
+      </header>
+      <div class="lp-preview-product">
+        <h3>Pizza Muzza</h3>
+        <p>Grande + promo gaseosa</p>
+        <strong>$10.500</strong>
+      </div>
+      <div class="lp-preview-cart">
+        <h4>Carrito</h4>
+        <p>2x Pizza Muzza <span>$21.000</span></p>
+        <p>Envio Zona Centro <span>$2.500</span></p>
+        <p class="lp-total">Total <span>$23.500</span></p>
+      </div>
+      <button class="btn btn-primary" type="button" disabled>Enviar por WhatsApp</button>
+    </aside>
+  </section>
+
+  <section class="lp-section" id="como-funciona">
+    <header class="lp-section-head">
+      <h2>Como funciona</h2>
+      <p>Implementacion simple para empezar a vender en el mismo dia.</p>
+    </header>
+    <div class="lp-steps">
+      <article class="card"><span>1</span><h3>Te registras</h3><p>Creas tu cuenta y completas datos del comercio.</p></article>
+      <article class="card"><span>2</span><h3>Elegis un plan</h3><p>Activas Basico, Premium o Elite segun tu operacion.</p></article>
+      <article class="card"><span>3</span><h3>Cargas productos</h3><p>Categorias, precios, promos y productos agotados.</p></article>
+      <article class="card"><span>4</span><h3>Compartis link y QR</h3><p>Publicas tu menu en redes, local y WhatsApp.</p></article>
+      <article class="card"><span>5</span><h3>Recibis pedidos armados</h3><p>El cliente envia el pedido listo con total y datos.</p></article>
+    </div>
+    <article class="card lp-delivery-box">
+      <h3>Delivery inteligente</h3>
       <ul>
-        <li>Menu publico premium responsive</li>
-        <li>Carrito con envio por zonas y checkout guiado</li>
-        <li>Dashboard completo para operar sin soporte tecnico</li>
+        <li>Zonas con costo configurable</li>
+        <li>Pedido minimo y envio gratis desde X monto</li>
+        <li>Horarios, abierto/cerrado y cierre temporal</li>
       </ul>
     </article>
   </section>
 
-  <section class="grid-4">
-    <article class="feature"><h3>QR y link inmediato</h3><p>Imprime y comparte tu menu en segundos.</p></article>
-    <article class="feature"><h3>Checkout por WhatsApp</h3><p>Mensaje armado con total, envio y pago.</p></article>
-    <article class="feature"><h3>Zonas y metodos de pago</h3><p>Configura reglas reales de operacion.</p></article>
-    <article class="feature"><h3>Panel profesional</h3><p>Productos, promos, horarios y analitica base.</p></article>
-  </section>
-
-  <section class="how">
-    <h2>Como funciona</h2>
-    <div class="steps">
-      <article><span>1</span><h3>Creas tu cuenta</h3><p>Personaliza marca, portada y datos del local.</p></article>
-      <article><span>2</span><h3>Publicas tu catalogo</h3><p>Organiza categorias, stock, promos y precios.</p></article>
-      <article><span>3</span><h3>Recibes pedidos</h3><p>Clientes compran y te llega todo por WhatsApp.</p></article>
+  <section class="lp-section lp-benefits">
+    <header class="lp-section-head">
+      <h2>Beneficios reales para el dia a dia</h2>
+    </header>
+    <div class="lp-benefits-grid">
+      <article class="card">
+        <ul>
+          <li>Menos preguntas repetidas por WhatsApp</li>
+          <li>Menos errores: el pedido llega ordenado</li>
+          <li>Mas ventas por promos y destacados</li>
+        </ul>
+      </article>
+      <article class="card">
+        <ul>
+          <li>Menu actualizado en segundos</li>
+          <li>Imagen profesional para tu comercio</li>
+          <li>Operacion clara para equipo y clientes</li>
+        </ul>
+      </article>
     </div>
   </section>
 
-  <section class="plans">
-    <h2>Planes</h2>
-    <div class="plan-grid">
-      <article class="plan"><h3>Basico</h3><p class="price">$12.999</p><p>Ideal para testear y validar ventas.</p></article>
-      <article class="plan featured"><p class="pill">Recomendado</p><h3>Premium</h3><p class="price">$16.999</p><p>Checkout completo y marca personalizada.</p></article>
-      <article class="plan"><h3>Elite</h3><p class="price">$21.999</p><p>Escala multi-local y soporte prioritario.</p></article>
+  <section class="lp-section">
+    <article class="card lp-demo-cta">
+      <div>
+        <h2>Probalo ahora: mira como compra un cliente</h2>
+        <p class="muted">Recorrido real del menu, carrito y checkout por WhatsApp.</p>
+      </div>
+      <a class="btn btn-primary" href="/demo/menu">Abrir demo</a>
+    </article>
+  </section>
+
+  <section class="lp-section" id="planes">
+    <header class="lp-section-head">
+      <h2>Planes claros para cada etapa</h2>
+      <p>Paga solo por lo que necesitas hoy, escala cuando quieras.</p>
+    </header>
+    <div class="plan-grid lp-plan-grid">
+      <article class="plan card">
+        <h3>Basico</h3>
+        <p class="price">$12.999</p>
+        <p>Hasta 10 productos (incluye carrito).</p>
+        <a class="btn btn-primary" href="/registro">Empezar con Basico</a>
+      </article>
+      <article class="plan card featured">
+        <p class="pill">Recomendado</p>
+        <h3>Premium</h3>
+        <p class="price">$16.999</p>
+        <p>Hasta 50 productos para operar con mayor volumen.</p>
+        <a class="btn btn-primary" href="/registro">Elegir Premium</a>
+      </article>
+      <article class="plan card">
+        <h3>Elite</h3>
+        <p class="price">$21.999</p>
+        <p>Productos ilimitados para negocios en crecimiento.</p>
+        <a class="btn btn-primary" href="/registro">Elegir Elite</a>
+      </article>
+    </div>
+
+    <article class="card lp-plans-table-wrap">
+      <h3>Que incluye cada plan</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Funcionalidad</th>
+              <th>Basico</th>
+              <th>Premium</th>
+              <th>Elite</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Menu digital + link + QR</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Carrito y pedido por WhatsApp</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Limite de productos</td><td>10</td><td>50</td><td>Ilimitado</td></tr>
+            <tr><td>Promos destacadas</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Zonas de envio con costo</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Metodos de pago configurables</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Horarios y cerrado temporal</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Pedido minimo / envio gratis desde X</td><td>Si</td><td>Si</td><td>Si</td></tr>
+            <tr><td>Soporte</td><td>Estandar</td><td>Prioritario</td><td>Premium</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-secondary" href="/precios">Ver planes en detalle</a>
+      </div>
+    </article>
+  </section>
+
+  <section class="lp-section">
+    <header class="lp-section-head">
+      <h2>Comercios que ya lo usan</h2>
+    </header>
+    <div class="lp-testimonials">
+      <article class="card"><p>"Subimos pedidos porque ahora el cliente arma todo."</p><strong>- Rotiseria Centro</strong></article>
+      <article class="card"><p>"Nos ahorra tiempo, no mandamos fotos del menu."</p><strong>- Burger Norte</strong></article>
+      <article class="card"><p>"El QR en el local funciona perfecto."</p><strong>- Pizzeria Don Pepe</strong></article>
     </div>
   </section>
 
-  <section class="faq">
-    <h2>Preguntas frecuentes</h2>
-    <article class="faq-item"><h3>Necesito app para usarlo?</h3><p>No. Funciona desde navegador en celular y desktop.</p></article>
-    <article class="faq-item"><h3>Puedo usar mi propio dominio?</h3><p>Si, el proyecto ya esta preparado para branding y custom domain.</p></article>
-    <article class="faq-item"><h3>Incluye panel de afiliados?</h3><p>Si, con referidos, revision manual y payouts semanales.</p></article>
+  <section class="lp-section" id="faq">
+    <header class="lp-section-head">
+      <h2>Preguntas frecuentes</h2>
+    </header>
+    <div class="faq">
+      <details class="faq-item"><summary><strong>Necesito una app?</strong></summary><p>No. Funciona desde navegador.</p></details>
+      <details class="faq-item"><summary><strong>Funciona en celular?</strong></summary><p>Si. El menu y el carrito son mobile-first.</p></details>
+      <details class="faq-item"><summary><strong>Como llega el pedido?</strong></summary><p>Llega por WhatsApp con resumen y total.</p></details>
+      <details class="faq-item"><summary><strong>Puedo cambiar precios cuando quiera?</strong></summary><p>Si, desde el panel en cualquier momento.</p></details>
+      <details class="faq-item"><summary><strong>Como configuro envio por zona?</strong></summary><p>Creas zonas y costos en el panel del comercio.</p></details>
+      <details class="faq-item"><summary><strong>Que pasa si el local esta cerrado?</strong></summary><p>El sistema puede bloquear el envio de pedidos.</p></details>
+      <details class="faq-item"><summary><strong>Puedo cambiar de plan?</strong></summary><p>Si, desde billing.</p></details>
+      <details class="faq-item"><summary><strong>Como pago?</strong></summary><p>Los planes se pagan online con Mercado Pago.</p></details>
+      <details class="faq-item"><summary><strong>Que pasa si el pago queda pendiente?</strong></summary><p>Puedes reintentar desde onboarding/checkout o billing.</p></details>
+      <details class="faq-item"><summary><strong>Donde pido soporte?</strong></summary><p>En <a class="link" href="/soporte">/soporte</a>.</p></details>
+    </div>
   </section>
 
-  <footer class="landing-footer">
-    <p>Contacto: hola@windimenu.com</p>
-    <p>Instagram: @windimenu</p>
-    <p>
-      <a class="link" href="/terminos">Terminos</a> |
-      <a class="link" href="/privacidad">Privacidad</a> |
-      <a class="link" href="/cookies">Cookies</a> |
-      <a class="link" href="/reembolsos">Reembolsos</a>
-    </p>
-  </footer>
+  <section class="lp-section">
+    <article class="card lp-final-cta">
+      <h2>Listo para empezar a vender con tu menu digital?</h2>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/registro">Crear mi menu</a>
+        <a class="btn btn-ghost" href="https://wa.me/5491100000000" target="_blank" rel="noopener noreferrer">Hablar por WhatsApp</a>
+      </div>
+    </article>
+  </section>
+
+  <%- include("partials/public-footer") %>
 </main>
 <%- include("partials/scripts") %>

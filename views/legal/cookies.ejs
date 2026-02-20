@@ -1,12 +1,6 @@
 <%- include("../partials/head", { title }) %>
 <main class="landing legal-page">
-  <header class="topbar">
-    <a href="/" class="logo">Windi Menu</a>
-    <div class="top-actions">
-      <a class="btn btn-ghost" href="/terminos">Terminos</a>
-      <a class="btn btn-ghost" href="/privacidad">Privacidad</a>
-    </div>
-  </header>
+  <%- include("../partials/public-nav") %>
 
   <section class="card">
     <h1>Politica de Cookies</h1>
@@ -21,5 +15,6 @@
     <h2>Como deshabilitar</h2>
     <p>Podes gestionar cookies desde la configuracion de tu navegador.</p>
   </section>
+  <%- include("../partials/public-footer") %>
 </main>
 <%- include("../partials/scripts") %>

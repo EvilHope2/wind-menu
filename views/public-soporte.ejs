@@ -1,0 +1,30 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+
+  <section class="card">
+    <h1>Soporte</h1>
+    <p class="muted">Te ayudamos a configurar y operar tu menu digital.</p>
+    <p><strong>Email:</strong> <a class="link" href="mailto:hola@windimenu.com">hola@windimenu.com</a></p>
+    <p><strong>WhatsApp:</strong> <a class="link" href="https://wa.me/5491100000000" target="_blank">+54 9 11 0000 0000</a></p>
+    <p><strong>Horario:</strong> Lun a Vie, 9:00 a 18:00 (AR)</p>
+  </section>
+
+  <section class="card">
+    <h2>Antes de escribir</h2>
+    <p><a class="link" href="/faq">Revisa preguntas frecuentes</a> y <a class="link" href="/como-funciona">como funciona</a>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Contacto rapido</h2>
+    <form class="form" action="mailto:hola@windimenu.com" method="post" enctype="text/plain">
+      <label>Nombre<input type="text" name="nombre" required /></label>
+      <label>Email<input type="email" name="email" required /></label>
+      <label>Mensaje<textarea name="mensaje" required></textarea></label>
+      <button class="btn btn-primary" type="submit">Enviar</button>
+    </form>
+  </section>
+
+  <%- include("partials/public-footer") %>
+</main>
+<%- include("partials/scripts") %>

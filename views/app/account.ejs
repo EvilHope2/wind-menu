@@ -1,0 +1,54 @@
+<%- include("../partials/head", { title, description: "Configura tus datos de cuenta y revisa tu aceptacion legal." }) %>
+<main class="app-shell">
+  <%- include("../partials/app-sidebar", { activePage }) %>
+  <section class="app-content">
+    <%- include("../partials/flash") %>
+
+    <header class="page-head">
+      <div>
+        <h1>Mi cuenta</h1>
+        <p class="muted">Gestiona tus datos basicos y el estado legal de tu cuenta.</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Perfil</h2>
+      <form class="form" method="post" action="/mi-cuenta">
+        <label>Nombre completo
+          <input type="text" name="full_name" value="<%= user.full_name %>" required />
+        </label>
+        <label>Email
+          <input type="email" value="<%= user.email %>" readonly />
+        </label>
+        <label>WhatsApp
+          <input type="text" name="whatsapp" value="<%= user.whatsapp %>" required />
+        </label>
+        <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Legal y consentimientos</h2>
+      <% if (latestConsent) { %>
+        <p><strong>Terminos:</strong> v<%= latestConsent.terms_version %></p>
+        <p><strong>Privacidad:</strong> v<%= latestConsent.privacy_version %></p>
+        <p><strong>Aceptado:</strong> <%= latestConsent.accepted_at %></p>
+      <% } else { %>
+        <p class="muted">Todavia no hay un consentimiento registrado para esta cuenta.</p>
+      <% } %>
+      <div class="hero-actions">
+        <a class="btn btn-ghost" href="/settings/legal">Ver detalle legal</a>
+        <a class="btn btn-ghost" href="/legal/accept">Actualizar aceptacion</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Seguridad</h2>
+      <p class="muted">Sesion iniciada como <%= user.role %>. Si usas un equipo compartido, cierra sesion al terminar.</p>
+      <form method="post" action="/logout">
+        <button class="btn btn-ghost" type="submit">Cerrar sesion</button>
+      </form>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

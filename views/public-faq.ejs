@@ -1,0 +1,27 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+
+  <section class="how">
+    <h1>Preguntas frecuentes</h1>
+    <div class="faq">
+      <% faqs.forEach((item) => { %>
+        <details class="faq-item">
+          <summary><strong><%= item.q %></strong></summary>
+          <p><%= item.a %></p>
+        </details>
+      <% }) %>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Necesitas ayuda?</h2>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="/precios">Ver planes</a>
+      <a class="btn btn-ghost" href="/soporte">Hablar con soporte</a>
+    </div>
+  </section>
+
+  <%- include("partials/public-footer") %>
+</main>
+<%- include("partials/scripts") %>

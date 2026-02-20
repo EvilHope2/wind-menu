@@ -1,0 +1,24 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+
+  <section class="how">
+    <h1>Como funciona</h1>
+    <div class="steps">
+      <article><span>1</span><h3>Registras tu comercio</h3><p>Creas cuenta y configuras tus datos basicos.</p></article>
+      <article><span>2</span><h3>Eliges tu plan</h3><p>Seleccionas Basico, Premium o Elite y activas tu cuenta.</p></article>
+      <article><span>3</span><h3>Cargas productos</h3><p>Organizas categorias, precios, imagenes y stock.</p></article>
+      <article><span>4</span><h3>Compartes link y QR</h3><p>Tus clientes abren el menu desde celular o escritorio.</p></article>
+      <article><span>5</span><h3>Recibes pedidos por WhatsApp</h3><p>El pedido llega armado con detalle y total.</p></article>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Delivery avanzado</h2>
+    <p>Configura zonas, costos, pedido minimo y envio gratis segun montos.</p>
+    <a class="btn btn-primary" href="/registro">Crear mi menu</a>
+  </section>
+
+  <%- include("partials/public-footer") %>
+</main>
+<%- include("partials/scripts") %>

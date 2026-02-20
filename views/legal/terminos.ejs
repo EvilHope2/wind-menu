@@ -1,13 +1,6 @@
 <%- include("../partials/head", { title }) %>
 <main class="landing legal-page">
-  <header class="topbar">
-    <a href="/" class="logo">Windi Menu</a>
-    <div class="top-actions">
-      <a class="btn btn-ghost" href="/privacidad">Privacidad</a>
-      <a class="btn btn-ghost" href="/cookies">Cookies</a>
-      <a class="btn btn-ghost" href="/reembolsos">Reembolsos</a>
-    </div>
-  </header>
+  <%- include("../partials/public-nav") %>
 
   <section class="card">
     <h1>Terminos y Condiciones</h1>
@@ -62,5 +55,6 @@
     <h2>17. Contacto</h2>
     <p>Email: <%= company.support_email %> | WhatsApp: <%= company.support_whatsapp %></p>
   </section>
+  <%- include("../partials/public-footer") %>
 </main>
 <%- include("../partials/scripts") %>

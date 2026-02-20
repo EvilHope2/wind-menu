@@ -141,11 +141,20 @@ app.use((req, res, next) => {
   if (!["COMMERCE", "AFFILIATE"].includes(role)) return next();
 
   const openPaths = [
+    "/",
+    "/precios",
+    "/faq",
+    "/demo",
+    "/como-funciona",
+    "/status",
+    "/soporte",
+    "/contacto",
     "/terminos",
     "/privacidad",
     "/cookies",
     "/reembolsos",
     "/legal/accept",
+    "/legal/aceptar",
     "/logout",
     "/login",
     "/register",
@@ -561,6 +570,44 @@ function displayPlanName(plan) {
   return plan.display_name || plan.name || plan.code || "Plan";
 }
 
+function ensureDefaultPlans() {
+  const activeCount = db
+    .prepare("SELECT COUNT(*) AS total FROM plans WHERE is_active = 1")
+    .get().total;
+  if (Number(activeCount) > 0) return;
+
+  const defaults = [
+    { code: "BASIC", display_name: "Basico", price_ars: 12999, max_products: 10 },
+    { code: "PREMIUM", display_name: "Premium", price_ars: 16999, max_products: 50 },
+    { code: "ELITE", display_name: "Elite", price_ars: 21999, max_products: null },
+  ];
+
+  for (const plan of defaults) {
+    const existing = db.prepare("SELECT id FROM plans WHERE code = ?").get(plan.code);
+    if (existing) {
+      db.prepare(
+        `UPDATE plans
+         SET display_name = ?, name = ?, price = ?, price_ars = ?, currency = 'ARS',
+             max_products = ?, is_active = 1
+         WHERE id = ?`
+      ).run(
+        plan.display_name,
+        plan.display_name,
+        plan.price_ars,
+        plan.price_ars,
+        plan.max_products,
+        existing.id
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO plans
+         (code, display_name, name, price, price_ars, currency, max_products, is_active)
+         VALUES (?, ?, ?, ?, ?, 'ARS', ?, 1)`
+      ).run(plan.code, plan.display_name, plan.display_name, plan.price_ars, plan.price_ars, plan.max_products);
+    }
+  }
+}
+
 function activeSubscriptionForBusiness(businessId) {
   return db
     .prepare(
@@ -593,9 +640,16 @@ function isSubscriptionPaidLike(status) {
 }
 
 function resolveCommerceGate(businessId) {
+  const business = db
+    .prepare("SELECT id, has_completed_onboarding, plan_id FROM businesses WHERE id = ?")
+    .get(businessId);
   const active = activeSubscriptionForBusiness(businessId);
   if (active) {
     return { allowed: true, redirectTo: null, active, pending: null };
+  }
+  // Compatibilidad para cuentas antiguas activadas antes del flujo de suscripciones.
+  if (business && (Number(business.has_completed_onboarding) === 1 || business.plan_id)) {
+    return { allowed: true, redirectTo: null, active: null, pending: null };
   }
   const pending = pendingSubscriptionForBusiness(businessId);
   if (pending) {
@@ -953,7 +1007,215 @@ function reverseAffiliateSale(saleId, adminId, note) {
 }
 
 app.get("/", (req, res) => {
-  res.render("landing", { title: "Windi Menu | Menu digital para tu comercio" });
+  res.render("landing", {
+    title: "Windi Menu | Menu digital para tu comercio",
+    description: "Crea tu menu digital con carrito, QR y pedidos por WhatsApp en minutos.",
+  });
+});
+
+app.get("/precios", (_req, res) => {
+  res.render("public-precios", {
+    title: "Precios | Windi Menu",
+    description: "Planes Basico, Premium y Elite para tu menu digital con carrito y WhatsApp.",
+  });
+});
+
+app.get("/faq", (_req, res) => {
+  const faqs = [
+    {
+      q: "Que es el menu digital?",
+      a: "Es una carta online de tu comercio para compartir por link o QR, actualizable en tiempo real.",
+    },
+    {
+      q: "Como funciona el carrito?",
+      a: "El cliente agrega productos, completa sus datos y envia el pedido armado por WhatsApp.",
+    },
+    {
+      q: "Como se envia el pedido por WhatsApp?",
+      a: "Se abre wa.me con un mensaje prearmado que incluye productos, total y datos de entrega o retiro.",
+    },
+    {
+      q: "Como configuro envio por zonas?",
+      a: "Desde el panel puedes crear zonas con costo, minimo y envio gratis por monto.",
+    },
+    {
+      q: "Puedo activar o desactivar metodos de pago?",
+      a: "Si. Puedes elegir tarjeta, transferencia y efectivo desde el panel de tu comercio.",
+    },
+    {
+      q: "Como se genera el QR?",
+      a: "En el panel tienes una seccion para generar y descargar el QR de tu menu.",
+    },
+    {
+      q: "Puedo cambiar precios cuando quiera?",
+      a: "Si. Puedes editar productos y precios en cualquier momento desde tu panel.",
+    },
+    {
+      q: "Puedo pausar pedidos o marcar cerrado?",
+      a: "Si. Puedes cerrar temporalmente o por horario, y bloquear pedidos fuera de hora.",
+    },
+    {
+      q: "Como cambio de plan?",
+      a: "Desde billing puedes seleccionar otro plan y pagar la nueva suscripcion.",
+    },
+    {
+      q: "Que pasa si no pago el plan?",
+      a: "La suscripcion queda pendiente o expirada y el acceso al panel se limita hasta regularizar.",
+    },
+    {
+      q: "Que pasa con los datos personales?",
+      a: "Tratamos datos para operar el servicio y soporte, segun Terminos y Politica de Privacidad.",
+    },
+  ];
+  res.render("public-faq", {
+    title: "FAQ | Windi Menu",
+    description: "Respuestas rapidas sobre menu digital, carrito, pagos, envios y configuracion.",
+    faqs,
+  });
+});
+
+app.get(["/soporte", "/contacto", "/support"], (_req, res) => {
+  res.render("public-soporte", {
+    title: "Soporte | Windi Menu",
+    description: "Canales de soporte de Windi Menu: WhatsApp, email y formulario de contacto.",
+  });
+});
+
+app.get("/demo", (_req, res) => {
+  res.render("public-demo", {
+    title: "Demo | Windi Menu",
+    description: "Prueba una demo real del menu digital con carrito, envio por zonas y pagos.",
+  });
+});
+
+app.get("/demo/menu", (_req, res) => {
+  const business = {
+    slug: "demo-menu",
+    business_name: "Pizzeria Demo",
+    whatsapp: "5491100000000",
+    logo_url: "https://images.unsplash.com/photo-1548365328-9f547fb0953f?auto=format&fit=crop&w=120&q=60",
+    cover_url: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1600&q=80",
+    hours: "Lun a Dom 19:00 a 00:30",
+    address: "Av. Corrientes 1234, CABA",
+    instagram: "https://instagram.com/windimenu",
+    delivery_enabled: 1,
+    pickup_enabled: 1,
+    minimum_order_amount: 8000,
+    free_delivery_over_amount: 20000,
+    cash_allow_change: 1,
+    transfer_alias: "PIZZERIA.DEMO.MP",
+    transfer_cvu: "0000003100000000000000",
+    transfer_account_holder: "Pizzeria Demo SRL",
+    transfer_instructions: "Enviar comprobante por WhatsApp al confirmar.",
+  };
+  const grouped = [
+    {
+      id: 1,
+      name: "Pizzas",
+      products: [
+        {
+          id: 101,
+          name: "Pizza Muzza",
+          description: "Salsa de tomate, muzzarella y oregano.",
+          price: 10500,
+          previous_price: 11900,
+          image_url:
+            "https://images.unsplash.com/photo-1594007654729-407eedc4be65?auto=format&fit=crop&w=900&q=80",
+          is_featured: 1,
+          is_sold_out: 0,
+        },
+        {
+          id: 102,
+          name: "Pizza Napolitana",
+          description: "Muzzarella, tomate fresco y ajo.",
+          price: 11800,
+          previous_price: null,
+          image_url:
+            "https://images.unsplash.com/photo-1573821663912-6df460f9c684?auto=format&fit=crop&w=900&q=80",
+          is_featured: 0,
+          is_sold_out: 0,
+        },
+      ],
+    },
+    {
+      id: 2,
+      name: "Bebidas",
+      products: [
+        {
+          id: 201,
+          name: "Gaseosa 1.5L",
+          description: "Linea cola, limon o naranja.",
+          price: 3000,
+          previous_price: null,
+          image_url:
+            "https://images.unsplash.com/photo-1624517452488-04869289c4ca?auto=format&fit=crop&w=900&q=80",
+          is_featured: 0,
+          is_sold_out: 0,
+        },
+        {
+          id: 202,
+          name: "Agua saborizada",
+          description: "Botella 500ml.",
+          price: 1900,
+          previous_price: null,
+          image_url: null,
+          is_featured: 0,
+          is_sold_out: 1,
+        },
+      ],
+    },
+  ];
+  const deliveryZones = [
+    {
+      id: 1,
+      name: "Centro",
+      price: 2500,
+      is_active: 1,
+      sort_order: 0,
+      minimum_order_amount: 10000,
+      free_delivery_over_amount: 25000,
+      estimated_time_min: 30,
+      estimated_time_max: 45,
+    },
+    {
+      id: 2,
+      name: "Zona Norte",
+      price: 3200,
+      is_active: 1,
+      sort_order: 1,
+      minimum_order_amount: null,
+      free_delivery_over_amount: null,
+      estimated_time_min: 40,
+      estimated_time_max: 60,
+    },
+  ];
+  const paymentMethods = { cash: true, transfer: true, card: true };
+  const openStatus = { canOrder: true, state: "open", label: "Abierto ahora", message: "" };
+
+  res.render("public-demo-menu", {
+    title: "Demo Menu | Windi Menu",
+    description: "Demo funcional del menu publico con carrito y checkout por WhatsApp.",
+    business,
+    grouped,
+    deliveryZones,
+    paymentMethods,
+    openStatus,
+  });
+});
+
+app.get("/como-funciona", (_req, res) => {
+  res.render("public-como-funciona", {
+    title: "Como funciona | Windi Menu",
+    description: "Conoce en 5 pasos como lanzar tu menu digital y recibir pedidos por WhatsApp.",
+  });
+});
+
+app.get("/status", (_req, res) => {
+  res.render("public-status", {
+    title: "Status | Windi Menu",
+    description: "Estado del servicio de Windi Menu.",
+    updatedAt: new Date().toLocaleString("es-AR"),
+  });
 });
 
 app.get("/register", (req, res) => {
@@ -1146,13 +1408,10 @@ app.get("/forgot-password", (_req, res) => {
   res.render("auth-forgot", { title: "Recuperar clave | Windi Menu" });
 });
 
-app.get("/support", (_req, res) => {
-  res.status(200).send("Soporte Windi Menu: hola@windimenu.com");
-});
-
 app.get("/terminos", (_req, res) => {
   res.render("legal/terminos", {
     title: "Terminos y Condiciones | Windi Menu",
+    description: "Terminos y condiciones de uso de Windi Menu.",
     legal: LEGAL_VERSIONS,
     company: LEGAL_COMPANY,
   });
@@ -1161,6 +1420,7 @@ app.get("/terminos", (_req, res) => {
 app.get("/privacidad", (_req, res) => {
   res.render("legal/privacidad", {
     title: "Politica de Privacidad | Windi Menu",
+    description: "Politica de privacidad de Windi Menu.",
     legal: LEGAL_VERSIONS,
     company: LEGAL_COMPANY,
   });
@@ -1169,6 +1429,7 @@ app.get("/privacidad", (_req, res) => {
 app.get("/cookies", (_req, res) => {
   res.render("legal/cookies", {
     title: "Politica de Cookies | Windi Menu",
+    description: "Politica de cookies de Windi Menu.",
     legal: LEGAL_VERSIONS,
     company: LEGAL_COMPANY,
   });
@@ -1177,6 +1438,7 @@ app.get("/cookies", (_req, res) => {
 app.get("/reembolsos", (_req, res) => {
   res.render("legal/reembolsos", {
     title: "Reembolsos y Cancelaciones | Windi Menu",
+    description: "Condiciones de cancelacion y reembolsos para planes de Windi Menu.",
     legal: LEGAL_VERSIONS,
     company: LEGAL_COMPANY,
   });
@@ -1187,7 +1449,7 @@ app.get("/legal/accept", requireAuth, (req, res) => {
   if (!["COMMERCE", "AFFILIATE"].includes(role)) return res.redirect("/");
   if (hasLatestLegalConsent(req.session.user.id, role)) {
     if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
-    const business = resolveBusinessForUser(req.session.user.id);
+    const business = getBusinessByUserId(req.session.user.id);
     if (!business) return renderBusinessProvisioning(res);
     const gate = resolveCommerceGate(business.id);
     return res.redirect(gate.allowed ? "/app" : gate.redirectTo);
@@ -1222,10 +1484,15 @@ app.post("/legal/accept", requireAuth, (req, res) => {
   if (role === "AFFILIATE") {
     return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/affiliate/dashboard");
   }
-  const business = resolveBusinessForUser(req.session.user.id);
+  const business = getBusinessByUserId(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/onboarding/plan");
   const gate = resolveCommerceGate(business.id);
   return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", gate.allowed ? "/app" : gate.redirectTo);
+});
+
+app.get("/legal/aceptar", requireAuth, (req, res) => {
+  const source = String(req.query.source || "");
+  return res.redirect(source ? `/legal/accept?source=${encodeURIComponent(source)}` : "/legal/accept");
 });
 
 app.get("/settings/legal", requireAuth, (req, res) => {
@@ -1259,6 +1526,7 @@ app.get("/onboarding/welcome", requireRole("COMMERCE"), async (req, res) => {
 });
 
 app.get("/onboarding/plan", requireRole("COMMERCE"), async (req, res) => {
+  ensureDefaultPlans();
   const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
   if (!business) return renderBusinessProvisioning(res);
   const gate = resolveCommerceGate(business.id);
@@ -1589,6 +1857,7 @@ app.get("/app", requireAuth, (req, res) => {
 });
 
 app.get(["/app/plans", "/billing"], requireAuth, (req, res) => {
+  ensureDefaultPlans();
   const business = getBusinessByUserId(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "error", "Comercio no encontrado.", "/register");
   const plans = db
@@ -1618,6 +1887,38 @@ app.get(["/app/plans", "/billing"], requireAuth, (req, res) => {
     activePage: "plans",
     mercadopagoReady: Boolean(MP_ACCESS_TOKEN),
   });
+});
+
+app.get("/mi-cuenta", requireRole("COMMERCE"), (req, res) => {
+  const user = db
+    .prepare("SELECT id, full_name, email, whatsapp, role, created_at FROM users WHERE id = ?")
+    .get(req.session.user.id);
+  if (!user) return flashAndRedirect(req, res, "error", "Usuario no encontrado.", "/login");
+  const latestConsent = latestLegalConsentByUser(user.id);
+  const business = user.role === "COMMERCE" ? getBusinessByUserId(user.id) : null;
+  if (user.role === "COMMERCE" && !business) return renderBusinessProvisioning(res);
+
+  res.render("app/account", {
+    title: "Mi cuenta | Windi Menu",
+    activePage: "account",
+    user,
+    business,
+    latestConsent,
+  });
+});
+
+app.post("/mi-cuenta", requireRole("COMMERCE"), (req, res) => {
+  const fullName = String(req.body.full_name || "").trim();
+  const whatsapp = String(req.body.whatsapp || "").trim();
+  if (!fullName || !whatsapp) {
+    return flashAndRedirect(req, res, "error", "Nombre y WhatsApp son obligatorios.", "/mi-cuenta");
+  }
+  db.prepare("UPDATE users SET full_name = ?, whatsapp = ? WHERE id = ?").run(fullName, whatsapp, req.session.user.id);
+  if (req.session.user) {
+    req.session.user.fullName = fullName;
+    req.session.user.whatsapp = whatsapp;
+  }
+  return flashAndRedirect(req, res, "success", "Datos actualizados.", "/mi-cuenta");
 });
 
 app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
@@ -2862,6 +3163,19 @@ app.get("/:slug", (req, res, next) => {
     "register",
     "registro",
     "forgot-password",
+    "precios",
+    "faq",
+    "soporte",
+    "contacto",
+    "demo",
+    "como-funciona",
+    "status",
+    "terminos",
+    "privacidad",
+    "cookies",
+    "reembolsos",
+    "legal",
+    "mi-cuenta",
     "r",
     "public",
     "uploads",
@@ -2891,7 +3205,10 @@ app.get("/:slug", (req, res, next) => {
 });
 
 app.use((_req, res) => {
-  res.status(404).render("404", { title: "Pagina no encontrada | Windi Menu" });
+  res.status(404).render("404", {
+    title: "Pagina no encontrada | Windi Menu",
+    description: "No encontramos la pagina que buscas en Windi Menu.",
+  });
 });
 
 let bootstrapPromise = null;

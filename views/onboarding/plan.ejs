@@ -13,27 +13,34 @@
       <input type="checkbox" id="onboarding-legal-check" />
       <span>Confirmo que lei y acepto los <a class="link" href="/terminos" target="_blank">Terminos</a> y la <a class="link" href="/privacidad" target="_blank">Politica de Privacidad</a>.</span>
     </label>
-    <div class="plan-grid">
-      <% plans.forEach((plan) => { %>
-        <article class="plan <%= String(plan.code).toUpperCase() === 'PREMIUM' ? 'featured' : '' %>">
-          <% if (String(plan.code).toUpperCase() === 'PREMIUM') { %><p class="pill">Recomendado</p><% } %>
-          <h3><%= plan.display_name || plan.name %></h3>
-          <p class="price">$<%= Number(plan.price_ars || plan.price || 0).toLocaleString("es-AR") %></p>
-          <p><strong>Limite productos:</strong>
-            <%= plan.max_products === null || plan.max_products === undefined ? 'Ilimitado' : plan.max_products %>
-          </p>
-          <p>Carrito + WhatsApp + panel autogestionable</p>
-          <button
-            type="button"
-            class="btn btn-primary js-plan-btn"
-            data-plan-code="<%= String(plan.code || '').toUpperCase() %>"
-            data-plan-id="<%= plan.id %>"
-            <%= mercadopagoReady ? '' : 'disabled' %>>
-            Elegir <%= plan.display_name || plan.name %>
-          </button>
-        </article>
-      <% }) %>
-    </div>
+    <% if (!plans || !plans.length) { %>
+      <section class="card">
+        <p class="muted">No hay planes disponibles en este momento. Reintenta en unos segundos o contacta soporte.</p>
+        <a class="btn btn-ghost" href="/soporte">Ir a soporte</a>
+      </section>
+    <% } else { %>
+      <div class="plan-grid">
+        <% plans.forEach((plan) => { %>
+          <article class="plan <%= String(plan.code).toUpperCase() === 'PREMIUM' ? 'featured' : '' %>">
+            <% if (String(plan.code).toUpperCase() === 'PREMIUM') { %><p class="pill">Recomendado</p><% } %>
+            <h3><%= plan.display_name || plan.name %></h3>
+            <p class="price">$<%= Number(plan.price_ars || plan.price || 0).toLocaleString("es-AR") %></p>
+            <p><strong>Limite productos:</strong>
+              <%= plan.max_products === null || plan.max_products === undefined ? 'Ilimitado' : plan.max_products %>
+            </p>
+            <p>Carrito + WhatsApp + panel autogestionable</p>
+            <button
+              type="button"
+              class="btn btn-primary js-plan-btn"
+              data-plan-code="<%= String(plan.code || '').toUpperCase() %>"
+              data-plan-id="<%= plan.id %>"
+              <%= mercadopagoReady ? '' : 'disabled' %>>
+              Elegir <%= plan.display_name || plan.name %>
+            </button>
+          </article>
+        <% }) %>
+      </div>
+    <% } %>
     <section class="card">
       <h3>FAQ</h3>
       <p class="muted">Podes cambiar de plan cuando quieras desde Facturacion.</p>

@@ -1,0 +1,19 @@
+<%- include("partials/head", { title, description }) %>
+<main class="landing">
+  <%- include("partials/public-nav") %>
+
+  <section class="card">
+    <h1>Estado del servicio</h1>
+    <p class="tag tag-ok">Operativo</p>
+    <p>Ultima actualizacion: <%= updatedAt %></p>
+    <p class="muted">No hay incidentes reportados en este momento.</p>
+  </section>
+
+  <section class="card">
+    <h2>Notas de mantenimiento</h2>
+    <p class="muted">Placeholder para futuras ventanas de mantenimiento programado.</p>
+  </section>
+
+  <%- include("partials/public-footer") %>
+</main>
+<%- include("partials/scripts") %>
