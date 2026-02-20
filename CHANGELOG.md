@@ -76,3 +76,25 @@
 - `views/partials/app-sidebar.ejs`
 - `package.json`
 - `scripts/smoke-test.js`
+
+## 2026-02-20 - QA Pass 2 (UX + Robustness)
+
+### Ajustes aplicados
+
+1. Prevencion de doble submit global en formularios.
+- Fix: lock de submit con feedback `Procesando...` para evitar envios duplicados.
+- Archivos: `public/js/app.js`, `public/css/styles.css`.
+
+2. Carrito WhatsApp: no vaciar carrito si popup bloqueado.
+- Fix: ahora solo limpia carrito cuando WhatsApp abre correctamente.
+- Archivos: `public/js/app.js`.
+
+3. Carrito: restaurar boton submit al fallar validaciones.
+- Fix: re-enable de submit cuando hay error de formulario en checkout publico.
+- Archivos: `public/js/app.js`.
+
+### Revalidacion
+
+- `npm run build`: OK
+- `npm run lint`: OK
+- `npm test`: OK (`Smoke test OK`)

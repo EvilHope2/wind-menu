@@ -7,6 +7,29 @@ document.querySelectorAll(".js-confirm").forEach((button) => {
   });
 });
 
+(() => {
+  // Prevent accidental double-submit and provide quick visual feedback.
+  document.querySelectorAll("form").forEach((form) => {
+    form.addEventListener("submit", () => {
+      const submitButtons = Array.from(
+        form.querySelectorAll("button[type='submit'], input[type='submit']")
+      );
+      submitButtons.forEach((button) => {
+        if (button.disabled) return;
+        if (!button.dataset.originalText) {
+          button.dataset.originalText = button.textContent || button.value || "";
+        }
+        button.disabled = true;
+        if (button.tagName === "BUTTON") {
+          button.textContent = "Procesando...";
+        } else {
+          button.value = "Procesando...";
+        }
+      });
+    });
+  });
+})();
+
 if (window.lucide && typeof window.lucide.createIcons === "function") {
   window.lucide.createIcons();
 }
@@ -536,6 +559,22 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     return lines.join("\n");
   }
 
+  function restoreFormSubmitButtons() {
+    const lockedButtons = form.querySelectorAll("button[type='submit'], input[type='submit']");
+    lockedButtons.forEach((button) => {
+      if (!button.disabled) return;
+      const original = button.dataset.originalText || "";
+      if (original) {
+        if (button.tagName === "BUTTON") {
+          button.textContent = original;
+        } else {
+          button.value = original;
+        }
+      }
+      button.disabled = false;
+    });
+  }
+
   function addProduct(product) {
     if (product.soldOut) return;
     const existing = cart.find((item) => item.id === product.id);
@@ -612,12 +651,18 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     if (validationError) {
       if (validationError.toLowerCase().includes("pago")) setPaymentError(validationError);
       else setError(validationError);
+      restoreFormSubmitButtons();
       return;
     }
 
     const message = buildWhatsappMessage();
     const waUrl = `https://wa.me/${businessWhatsapp}?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, "_blank");
+    const popup = window.open(waUrl, "_blank");
+    if (!popup) {
+      setError("No se pudo abrir WhatsApp. Habilita popups e intenta nuevamente.");
+      restoreFormSubmitButtons();
+      return;
+    }
 
     cart = [];
     saveCart();

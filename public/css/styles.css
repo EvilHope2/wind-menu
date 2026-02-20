@@ -292,6 +292,14 @@ code {
   transform: translateY(-1px);
 }
 
+.btn:disabled,
+button:disabled,
+input[type="submit"]:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 .btn:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
