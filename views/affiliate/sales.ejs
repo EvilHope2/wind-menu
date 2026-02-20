@@ -1,34 +1,54 @@
-<%- include("../partials/head", { title }) %>
+<%- include("../partials/head", { title, robots }) %>
 <main class="landing">
   <%- include("../partials/affiliate-nav") %>
   <section class="how">
     <div class="card">
-      <form class="form inline" method="get" action="/affiliate/sales">
-        <select name="status">
-          <option value="">Todos</option>
-          <% ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'REVERSED'].forEach((s) => { %>
-            <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>><%= s %></option>
-          <% }) %>
-        </select>
+      <form class="form inline" method="get" action="/afiliados/ventas">
+        <label>Estado
+          <select name="status">
+            <option value="">Todos</option>
+            <% ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'REVERSED'].forEach((s) => { %>
+              <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>><%= s %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>Desde
+          <input type="date" name="date_from" value="<%= filters.date_from || '' %>" />
+        </label>
+        <label>Hasta
+          <input type="date" name="date_to" value="<%= filters.date_to || '' %>" />
+        </label>
         <button class="btn btn-primary" type="submit">Filtrar</button>
       </form>
     </div>
+
+    <section class="stats-grid">
+      <% ['PENDING', 'APPROVED', 'PAID', 'REJECTED', 'REVERSED'].forEach((status) => { const row = (totalsByStatus || []).find((item) => item.status === status) || { total: 0, commission: 0 }; %>
+        <article class="stat-card">
+          <h3><%= status %></h3>
+          <strong><%= row.total %></strong>
+          <small>$<%= Number(row.commission || 0).toLocaleString("es-AR") %></small>
+        </article>
+      <% }) %>
+    </section>
+
     <section class="card">
       <h1>Ventas</h1>
       <% if (!sales.length) { %><div class="empty">No hay ventas para este filtro.</div><% } %>
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Comision</th><th>Puntos</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Comision</th><th>Puntos</th><th>Estado</th><th>Nota admin</th></tr></thead>
           <tbody>
             <% sales.forEach((s) => { %>
               <tr>
                 <td><%= s.created_at %></td>
                 <td><%= s.business_name || '-' %></td>
                 <td><%= s.plan_name || '-' %></td>
-                <td>$<%= Number(s.amount).toLocaleString("es-AR") %></td>
-                <td>$<%= Number(s.commission_amount).toLocaleString("es-AR") %></td>
-                <td><%= s.points_earned %></td>
+                <td>$<%= Number(s.amount || 0).toLocaleString("es-AR") %></td>
+                <td>$<%= Number(s.commission_amount || 0).toLocaleString("es-AR") %></td>
+                <td><%= s.points_earned || 0 %></td>
                 <td><span class="tag"><%= s.status %></span></td>
+                <td><%= s.review_note || s.reverse_note || '-' %></td>
               </tr>
             <% }) %>
           </tbody>

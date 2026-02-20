@@ -17,7 +17,7 @@ function requireRole(roles) {
       req.session.flash = { type: "error", text: "No tenes permisos para esa seccion." };
       const role = req.session.user.role;
       if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
-      if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
+      if (role === "AFFILIATE") return res.redirect("/afiliados/panel");
       return res.redirect("/app");
     }
     return next();

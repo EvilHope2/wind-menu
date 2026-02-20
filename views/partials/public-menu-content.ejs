@@ -94,70 +94,107 @@
   </section>
 
   <% if (!previewMode) { %>
-    <button type="button" class="cart-float" data-open-cart>
+    <button type="button" class="cart-float" data-open-cart aria-label="Abrir carrito">
+      <i data-lucide="shopping-cart"></i>
       <span>Carrito</span>
       <strong data-cart-count>0</strong>
+      <small data-cart-fab-total>$0</small>
     </button>
 
     <aside class="cart-drawer" data-cart-drawer aria-hidden="true">
       <div class="cart-overlay" data-close-cart></div>
       <section class="cart-panel">
+        <div class="cart-grabber" aria-hidden="true"></div>
         <header class="cart-head">
           <h2>Tu pedido</h2>
           <button type="button" class="btn btn-ghost" data-close-cart>Cerrar</button>
         </header>
 
-        <div class="cart-items" data-cart-items>
-          <p class="empty">Todavia no agregaste productos.</p>
+        <div class="cart-scroll">
+          <div class="cart-items" data-cart-items>
+            <p class="empty">Todavia no agregaste productos.</p>
+          </div>
+
+          <div class="cart-summary">
+            <h3>Resumen</h3>
+            <div><span>Subtotal productos</span><strong data-cart-subtotal>$0</strong></div>
+            <div data-shipping-row class="hidden"><span data-shipping-label>Envio</span><strong data-cart-shipping>$0</strong></div>
+            <div data-discount-row class="hidden"><span>Descuento</span><strong data-cart-discount>$0</strong></div>
+            <div class="cart-total"><span>Total final</span><strong data-cart-total>$0</strong></div>
+            <small class="muted hidden" data-estimated-time></small>
+          </div>
+
+          <form class="cart-form" data-cart-form id="public-cart-form">
+            <section class="cart-block">
+              <h3>Datos del pedido</h3>
+              <label>Nombre del cliente
+                <input type="text" name="customer_name" placeholder="Tu nombre" required />
+              </label>
+
+              <fieldset class="order-type-fieldset">
+                <legend>Tipo de pedido</legend>
+                <div class="segmented" data-order-segment>
+                  <% if (business.pickup_enabled) { %>
+                    <label class="seg-option">
+                      <input type="radio" name="order_type" value="retiro" checked />
+                      <span>Retiro</span>
+                    </label>
+                  <% } %>
+                  <% if (business.delivery_enabled) { %>
+                    <label class="seg-option">
+                      <input type="radio" name="order_type" value="envio" <%= business.pickup_enabled ? '' : 'checked' %> />
+                      <span>Envio</span>
+                    </label>
+                  <% } %>
+                </div>
+                <% if (business.delivery_enabled && (!deliveryZones || !deliveryZones.length)) { %>
+                  <p class="cart-help">Este comercio no tiene zonas de envio configuradas.</p>
+                <% } %>
+              </fieldset>
+
+              <label data-zone-wrap class="hidden">Zona de envio
+                <select name="delivery_zone_id">
+                  <option value="">Seleccionar zona</option>
+                </select>
+              </label>
+              <label data-address-wrap class="hidden">Direccion
+                <input type="text" name="address" />
+              </label>
+              <label data-reference-wrap class="hidden">Referencia
+                <input type="text" name="reference" />
+              </label>
+            </section>
+
+            <section class="cart-block">
+              <fieldset class="payment-fieldset" data-payment-wrap>
+                <legend>Metodo de pago</legend>
+                <div class="payment-options" data-payment-options></div>
+                <div class="transfer-box hidden" data-transfer-box></div>
+                <label data-cash-change-wrap class="hidden">Con cuanto pagas? (opcional)
+                  <input type="number" step="0.01" min="0" name="cash_change_amount" placeholder="Ej: 30000" />
+                </label>
+                <p class="cart-error hidden" data-payment-error></p>
+              </fieldset>
+            </section>
+
+            <section class="cart-block">
+              <label>Observaciones
+                <textarea name="notes" maxlength="200" placeholder="Ej: sin cebolla, sin ajo, etc."></textarea>
+              </label>
+              <p class="cart-error hidden" data-cart-error></p>
+            </section>
+          </form>
         </div>
 
-        <div class="cart-summary">
-          <div><span>Subtotal</span><strong data-cart-subtotal>$0</strong></div>
-          <div data-shipping-row class="hidden"><span data-shipping-label>Envio</span><strong data-cart-shipping>$0</strong></div>
-          <div class="cart-total"><span>Total</span><strong data-cart-total>$0</strong></div>
-          <small class="muted hidden" data-estimated-time></small>
-        </div>
-
-        <form class="cart-form" data-cart-form>
-          <label>Nombre del cliente
-            <input type="text" name="customer_name" required />
-          </label>
-
-          <label>Tipo de pedido
-            <select name="order_type" required>
-              <% if (business.pickup_enabled) { %><option value="retiro">Retiro en local</option><% } %>
-              <% if (business.delivery_enabled) { %><option value="envio">Envio a domicilio</option><% } %>
-            </select>
-          </label>
-
-          <label data-zone-wrap class="hidden">Zona de envio
-            <select name="delivery_zone_id">
-              <option value="">Seleccionar zona</option>
-            </select>
-          </label>
-          <label data-address-wrap class="hidden">Direccion
-            <input type="text" name="address" />
-          </label>
-          <label data-reference-wrap class="hidden">Referencia
-            <input type="text" name="reference" />
-          </label>
-
-          <fieldset class="payment-fieldset" data-payment-wrap>
-            <legend>Metodo de pago</legend>
-            <div class="payment-options" data-payment-options></div>
-            <div class="transfer-box hidden" data-transfer-box></div>
-            <label data-cash-change-wrap class="hidden">Con cuanto pagas? (opcional)
-              <input type="number" step="0.01" min="0" name="cash_change_amount" />
-            </label>
-            <p class="cart-error hidden" data-payment-error></p>
-          </fieldset>
-
-          <label>Observaciones
-            <textarea name="notes" placeholder="Sin cebolla, tocar timbre, etc."></textarea>
-          </label>
-          <p class="cart-error hidden" data-cart-error></p>
-          <button type="submit" class="btn btn-primary">Enviar pedido por WhatsApp</button>
-        </form>
+        <footer class="cart-sticky">
+          <div>
+            <small>Total final</small>
+            <strong data-cart-cta-total>$0</strong>
+          </div>
+          <button type="submit" form="public-cart-form" class="btn btn-primary" data-submit-order>Enviar pedido por WhatsApp</button>
+          <button type="button" class="btn btn-ghost" data-close-cart>Seguir comprando</button>
+          <small class="muted" data-cart-sticky-help>Completa los datos para enviar.</small>
+        </footer>
       </section>
     </aside>
   <% } %>

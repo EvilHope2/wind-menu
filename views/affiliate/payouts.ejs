@@ -1,0 +1,34 @@
+<%- include("../partials/head", { title, robots }) %>
+<main class="landing">
+  <%- include("../partials/affiliate-nav") %>
+  <section class="how">
+    <section class="stats-grid">
+      <article class="stat-card"><h3>Saldo por cobrar</h3><strong>$<%= Number(pendingForPayout || 0).toLocaleString("es-AR") %></strong></article>
+      <article class="stat-card"><h3>Comision pagada total</h3><strong>$<%= Number(affiliate.total_commission_paid || 0).toLocaleString("es-AR") %></strong></article>
+      <article class="stat-card"><h3>Puntos confirmados</h3><strong><%= affiliate.points_confirmed || 0 %></strong></article>
+    </section>
+
+    <section class="card">
+      <h1>Pagos semanales</h1>
+      <p class="muted">Las comisiones se liquidan semanalmente y requieren aprobacion manual.</p>
+      <% if (!payouts.length) { %><div class="empty">Aun no tienes pagos registrados.</div><% } %>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Periodo</th><th>Monto pagado</th><th>Metodo</th><th>Nota</th><th>Fecha</th></tr></thead>
+          <tbody>
+            <% payouts.forEach((p) => { %>
+              <tr>
+                <td><%= p.period_start %> a <%= p.period_end %></td>
+                <td>$<%= Number(p.amount_paid || 0).toLocaleString("es-AR") %></td>
+                <td><%= p.method || '-' %></td>
+                <td><%= p.note || '-' %></td>
+                <td><%= p.created_at %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

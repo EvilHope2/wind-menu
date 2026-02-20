@@ -1,0 +1,29 @@
+<%- include("../partials/head", { title, robots }) %>
+<main class="auth-wrap">
+  <section class="card" style="width:min(620px,100%)">
+    <%- include("../partials/flash") %>
+    <h1>Registro afiliados</h1>
+    <p class="muted">Crea tu cuenta y obten tu link unico de referido.</p>
+    <form class="form" method="post" action="/afiliados/registro">
+      <label>Nombre y apellido
+        <input type="text" name="full_name" required />
+      </label>
+      <label>Email
+        <input type="email" name="email" required />
+      </label>
+      <label>WhatsApp
+        <input type="text" name="whatsapp" required />
+      </label>
+      <label>Contrasena
+        <input type="password" name="password" minlength="6" required />
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="accept_legal" value="1" required />
+        <span>Acepto <a class="link" href="/terminos" target="_blank" rel="noopener noreferrer">Terminos</a> y <a class="link" href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a>.</span>
+      </label>
+      <button class="btn btn-primary" type="submit">Crear cuenta afiliado</button>
+    </form>
+    <p class="muted">Ya tengo cuenta. <a class="link" href="/afiliados/login">Ingresar</a></p>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

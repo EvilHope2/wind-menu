@@ -1,0 +1,19 @@
+<%- include("../partials/head", { title, robots }) %>
+<main class="auth-wrap">
+  <section class="card" style="width:min(520px,100%)">
+    <%- include("../partials/flash") %>
+    <h1>Ingreso afiliados</h1>
+    <p class="muted">Area privada para afiliados de Windi Menu.</p>
+    <form class="form" method="post" action="/afiliados/login">
+      <label>Email
+        <input type="email" name="email" required />
+      </label>
+      <label>Contrasena
+        <input type="password" name="password" required />
+      </label>
+      <button class="btn btn-primary" type="submit">Ingresar</button>
+    </form>
+    <p class="muted">No tengo cuenta. <a class="link" href="/afiliados/registro">Crear cuenta afiliado</a></p>
+  </section>
+</main>
+<%- include("../partials/scripts") %>

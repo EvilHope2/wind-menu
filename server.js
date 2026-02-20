@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const path = require("path");
+const crypto = require("crypto");
 const express = require("express");
 const cookieSession = require("cookie-session");
 const bcrypt = require("bcryptjs");
@@ -160,6 +161,9 @@ app.use((req, res, next) => {
     "/register",
     "/registro",
     "/support",
+    "/afiliados/login",
+    "/afiliados/registro",
+    "/robots.txt",
   ];
 
   if (openPaths.some((path) => req.path === path || req.path.startsWith(`${path}/`))) {
@@ -178,6 +182,39 @@ app.use((req, res, next) => {
     text: "Necesitas aceptar los Terminos y la Politica de Privacidad vigentes para continuar.",
   };
   return res.redirect("/legal/accept");
+});
+
+app.use("/afiliados", (req, res, next) => {
+  const openAuthPaths = new Set(["/login", "/registro"]);
+  const currentPath = req.path || "/";
+  const user = req.session?.user || null;
+
+  if (openAuthPaths.has(currentPath)) {
+    if (user?.role === "AFFILIATE" || user?.role === "ADMIN") {
+      return res.redirect("/afiliados/panel");
+    }
+    if (user) {
+      return res.status(404).render("404", {
+        title: "Pagina no encontrada | Windi Menu",
+        description: "No encontramos la pagina que buscas en Windi Menu.",
+      });
+    }
+    return next();
+  }
+
+  if (!user) {
+    req.session.flash = { type: "error", text: "Inicia sesion para ingresar al area de afiliados." };
+    return res.redirect("/afiliados/login");
+  }
+
+  if (!["AFFILIATE", "ADMIN"].includes(user.role)) {
+    return res.status(404).render("404", {
+      title: "Pagina no encontrada | Windi Menu",
+      description: "No encontramos la pagina que buscas en Windi Menu.",
+    });
+  }
+
+  return next();
 });
 
 function flashAndRedirect(req, res, type, text, to) {
@@ -372,6 +409,41 @@ function findAffiliateByRefCode(refCode) {
        WHERE a.ref_code = ? AND a.is_active = 1`
     )
     .get(refCode);
+}
+
+function affiliateProfileByUserId(userId) {
+  return db
+    .prepare(
+      `SELECT a.*, u.full_name, u.email, u.whatsapp
+       FROM affiliates a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.user_id = ?`
+    )
+    .get(userId);
+}
+
+function generateAffiliateRefCode(seedText = "") {
+  const seed = String(seedText || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 6);
+  for (let i = 0; i < 12; i += 1) {
+    const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const candidate = `${seed || "AFI"}${random}`;
+    const exists = db.prepare("SELECT 1 FROM affiliates WHERE ref_code = ?").get(candidate);
+    if (!exists) return candidate;
+  }
+  const fallback = `AFI${Date.now().toString(36).toUpperCase()}`;
+  const conflict = db.prepare("SELECT 1 FROM affiliates WHERE ref_code = ?").get(fallback);
+  return conflict ? `${fallback}${Math.floor(Math.random() * 1000)}` : fallback;
+}
+
+function resolveAffiliateUserIdForRequest(req) {
+  if (req.session?.user?.role !== "ADMIN") return req.session?.user?.id || null;
+  const requested = Number(req.query.user_id || 0);
+  if (requested > 0) return requested;
+  const first = db.prepare("SELECT user_id FROM affiliates ORDER BY id ASC LIMIT 1").get();
+  return first?.user_id || null;
 }
 
 function getActiveDeliveryZones(businessId) {
@@ -1013,6 +1085,10 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send("User-agent: *\nDisallow: /afiliados/\n");
+});
+
 app.get("/precios", (_req, res) => {
   res.render("public-precios", {
     title: "Precios | Windi Menu",
@@ -1256,6 +1332,112 @@ app.get("/r/:refCode", (req, res) => {
   res.redirect(`/register?ref=${encodeURIComponent(refCode)}`);
 });
 
+app.get("/afiliados/login", (_req, res) => {
+  res.render("affiliate/auth-login", {
+    title: "Ingreso afiliados | Windi Menu",
+    robots: "noindex,nofollow",
+  });
+});
+
+app.post("/afiliados/login", async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+
+  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  if (!user && RUNTIME_SYNC && HAS_SUPABASE_DB) {
+    try {
+      await withTimeout(pullMirrorNow(), 2500);
+      user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    } catch (_error) {
+      // noop
+    }
+  }
+
+  if (!user || !bcrypt.compareSync(password, user.password_hash) || !["AFFILIATE", "ADMIN"].includes(user.role)) {
+    return flashAndRedirect(req, res, "error", "Email o clave invalidos.", "/afiliados/login");
+  }
+
+  req.session.user = {
+    id: user.id,
+    fullName: user.full_name,
+    email: user.email,
+    role: user.role,
+  };
+
+  if (user.role === "ADMIN") return flashAndRedirect(req, res, "success", "Sesion iniciada.", "/admin/affiliate-sales");
+  return flashAndRedirect(req, res, "success", "Sesion iniciada.", "/afiliados/panel");
+});
+
+app.get("/afiliados/registro", (_req, res) => {
+  res.render("affiliate/auth-register", {
+    title: "Registro afiliados | Windi Menu",
+    robots: "noindex,nofollow",
+  });
+});
+
+app.post("/afiliados/registro", (req, res) => {
+  const fullName = String(req.body.full_name || "").trim();
+  const whatsapp = String(req.body.whatsapp || "").trim();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+
+  if (!fullName || !whatsapp || !email || password.length < 6) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Completa todos los campos. La clave debe tener al menos 6 caracteres.",
+      "/afiliados/registro"
+    );
+  }
+  if (!req.body.accept_legal) {
+    return flashAndRedirect(
+      req,
+      res,
+      "error",
+      "Debes aceptar Terminos y Privacidad para continuar.",
+      "/afiliados/registro"
+    );
+  }
+
+  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  if (existing) return flashAndRedirect(req, res, "error", "Ese email ya esta registrado.", "/afiliados/registro");
+
+  const passwordHash = bcrypt.hashSync(password, 10);
+  const userResult = db
+    .prepare("INSERT INTO users (full_name, email, whatsapp, role, password_hash) VALUES (?, ?, ?, 'AFFILIATE', ?)")
+    .run(fullName, email, whatsapp, passwordHash);
+  const userId = userResult.lastInsertRowid;
+  const refCode = generateAffiliateRefCode(fullName || email);
+
+  db.prepare(
+    `INSERT INTO affiliates
+     (user_id, ref_code, commission_rate, points_confirmed, points_debt, total_commission_earned, total_commission_paid, negative_balance, is_active)
+     VALUES (?, ?, 0.25, 0, 0, 0, 0, 0, 1)`
+  ).run(userId, refCode);
+
+  recordLegalConsent(req, { userId, role: "AFFILIATE", source: "registration" });
+
+  req.session.user = {
+    id: userId,
+    fullName,
+    email,
+    role: "AFFILIATE",
+  };
+
+  scheduleMirrorPush();
+  return flashAndRedirect(req, res, "success", "Cuenta afiliada creada.", "/afiliados/panel");
+});
+
+app.get("/afiliados", (req, res) => {
+  if (!req.session?.user) return res.redirect("/afiliados/login");
+  if (["AFFILIATE", "ADMIN"].includes(req.session.user.role)) return res.redirect("/afiliados/panel");
+  return res.status(404).render("404", {
+    title: "Pagina no encontrada | Windi Menu",
+    description: "No encontramos la pagina que buscas en Windi Menu.",
+  });
+});
+
 app.post("/register", async (req, res) => {
   const { full_name, business_name, whatsapp, email, password } = req.body;
   const cleanEmail = String(email || "").trim().toLowerCase();
@@ -1348,7 +1530,7 @@ app.get("/login", async (req, res) => {
   if (req.session.user) {
     const role = req.session.user.role || "COMMERCE";
     if (role === "ADMIN") return res.redirect("/admin/affiliate-sales");
-    if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
+    if (role === "AFFILIATE") return res.redirect("/afiliados/panel");
     const business = await resolveBusinessForUser(req.session.user.id, { waitForPull: true });
     if (!business) return renderBusinessProvisioning(res);
     const gate = resolveCommerceGate(business.id);
@@ -1379,7 +1561,7 @@ app.post("/login", async (req, res) => {
 
   let target = "/app";
   if (role === "AFFILIATE") {
-    target = "/affiliate/dashboard";
+    target = "/afiliados/panel";
   } else if (role === "ADMIN") {
     target = "/admin/affiliate-sales";
   } else {
@@ -1448,7 +1630,7 @@ app.get("/legal/accept", requireAuth, (req, res) => {
   const role = req.session.user.role || "COMMERCE";
   if (!["COMMERCE", "AFFILIATE"].includes(role)) return res.redirect("/");
   if (hasLatestLegalConsent(req.session.user.id, role)) {
-    if (role === "AFFILIATE") return res.redirect("/affiliate/dashboard");
+    if (role === "AFFILIATE") return res.redirect("/afiliados/panel");
     const business = getBusinessByUserId(req.session.user.id);
     if (!business) return renderBusinessProvisioning(res);
     const gate = resolveCommerceGate(business.id);
@@ -1482,7 +1664,7 @@ app.post("/legal/accept", requireAuth, (req, res) => {
   });
 
   if (role === "AFFILIATE") {
-    return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/affiliate/dashboard");
+    return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/afiliados/panel");
   }
   const business = getBusinessByUserId(req.session.user.id);
   if (!business) return flashAndRedirect(req, res, "success", "Consentimiento actualizado.", "/onboarding/plan");
@@ -2232,6 +2414,12 @@ app.post("/app/delivery-zones", requireAuth, (req, res) => {
   if (!name) {
     return flashAndRedirect(req, res, "error", "El nombre de zona es obligatorio.", "/app/delivery-zones");
   }
+  const duplicated = db
+    .prepare("SELECT id FROM delivery_zones WHERE business_id = ? AND LOWER(name) = LOWER(?)")
+    .get(business.id, name);
+  if (duplicated) {
+    return flashAndRedirect(req, res, "error", "Ya existe una zona con ese nombre.", "/app/delivery-zones");
+  }
 
   db.prepare(
     `INSERT INTO delivery_zones
@@ -2262,6 +2450,12 @@ app.post("/app/delivery-zones/:id/update", requireAuth, (req, res) => {
 
   const name = String(req.body.name || "").trim();
   if (!name) return flashAndRedirect(req, res, "error", "El nombre es obligatorio.", "/app/delivery-zones");
+  const duplicated = db
+    .prepare("SELECT id FROM delivery_zones WHERE business_id = ? AND LOWER(name) = LOWER(?) AND id <> ?")
+    .get(business.id, name, zoneId);
+  if (duplicated) {
+    return flashAndRedirect(req, res, "error", "Ya existe una zona con ese nombre.", "/app/delivery-zones");
+  }
 
   db.prepare(
     `UPDATE delivery_zones
@@ -2620,16 +2814,11 @@ app.get("/app/qr/download", requireAuth, async (req, res) => {
   res.send(pngBuffer);
 });
 
-app.get("/affiliate/dashboard", requireRole("AFFILIATE"), (req, res) => {
-  const affiliate = db
-    .prepare(
-      `SELECT a.*, u.full_name
-       FROM affiliates a
-       JOIN users u ON u.id = a.user_id
-       WHERE a.user_id = ?`
-    )
-    .get(req.session.user.id);
-  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/");
+app.get("/afiliados/panel", (req, res) => {
+  const userId = resolveAffiliateUserIdForRequest(req);
+  if (!userId) return flashAndRedirect(req, res, "error", "No hay afiliados registrados.", "/admin/affiliates");
+  const affiliate = affiliateProfileByUserId(userId);
+  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/admin/affiliates");
 
   const referrals = db
     .prepare("SELECT COUNT(*) AS total FROM businesses WHERE affiliate_id = ?")
@@ -2659,7 +2848,17 @@ app.get("/affiliate/dashboard", requireRole("AFFILIATE"), (req, res) => {
        WHERE affiliate_id = ? AND status = 'PENDING'`
     )
     .get(affiliate.id).total;
-
+  const lastSales = db
+    .prepare(
+      `SELECT s.*, b.business_name, p.name AS plan_name
+       FROM affiliate_sales s
+       LEFT JOIN businesses b ON b.id = s.business_id
+       LEFT JOIN plans p ON p.id = s.plan_id
+       WHERE s.affiliate_id = ?
+       ORDER BY s.created_at DESC
+       LIMIT 10`
+    )
+    .all(affiliate.id);
   const payouts = db
     .prepare(
       `SELECT * FROM affiliate_payouts
@@ -2673,21 +2872,27 @@ app.get("/affiliate/dashboard", requireRole("AFFILIATE"), (req, res) => {
 
   res.render("affiliate/dashboard", {
     title: "Panel Afiliado | Windi Menu",
+    robots: "noindex,nofollow",
     affiliate,
     referrals,
     statusMap,
     pendingApproval,
     pendingForPayout,
     payouts,
+    lastSales,
     baseUrl: BASE_URL,
   });
 });
 
-app.get("/affiliate/sales", requireRole("AFFILIATE"), (req, res) => {
-  const affiliate = db.prepare("SELECT * FROM affiliates WHERE user_id = ?").get(req.session.user.id);
-  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/");
+app.get("/afiliados/ventas", (req, res) => {
+  const userId = resolveAffiliateUserIdForRequest(req);
+  if (!userId) return flashAndRedirect(req, res, "error", "No hay afiliados registrados.", "/admin/affiliates");
+  const affiliate = affiliateProfileByUserId(userId);
+  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/admin/affiliates");
 
   const status = String(req.query.status || "").trim().toUpperCase();
+  const dateFrom = String(req.query.date_from || "").trim();
+  const dateTo = String(req.query.date_to || "").trim();
   let sql = `
     SELECT s.*, b.business_name, p.name AS plan_name
     FROM affiliate_sales s
@@ -2699,37 +2904,102 @@ app.get("/affiliate/sales", requireRole("AFFILIATE"), (req, res) => {
     sql += " AND s.status = ?";
     params.push(status);
   }
+  if (dateFrom) {
+    sql += " AND date(s.created_at) >= date(?)";
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    sql += " AND date(s.created_at) <= date(?)";
+    params.push(dateTo);
+  }
   sql += " ORDER BY s.created_at DESC";
 
   const sales = db.prepare(sql).all(...params);
-  res.render("affiliate/sales", {
-    title: "Ventas afiliado | Windi Menu",
-    affiliate,
-    sales,
-    filters: { status },
-  });
-});
-
-app.get("/affiliate/referrals", requireRole("AFFILIATE"), (req, res) => {
-  const affiliate = db.prepare("SELECT * FROM affiliates WHERE user_id = ?").get(req.session.user.id);
-  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/");
-
-  const referrals = db
+  const totalsByStatus = db
     .prepare(
-      `SELECT b.*, u.email AS owner_email, u.full_name AS owner_name
-       FROM businesses b
-       JOIN users u ON u.id = b.user_id
-       WHERE b.affiliate_id = ?
-       ORDER BY b.referred_at DESC, b.created_at DESC`
+      `SELECT status, COUNT(*) AS total, COALESCE(SUM(commission_amount), 0) AS commission
+       FROM affiliate_sales
+       WHERE affiliate_id = ?
+       GROUP BY status`
     )
     .all(affiliate.id);
 
-  res.render("affiliate/referrals", {
-    title: "Comercios referidos | Windi Menu",
+  res.render("affiliate/sales", {
+    title: "Ventas afiliado | Windi Menu",
+    robots: "noindex,nofollow",
     affiliate,
-    referrals,
+    sales,
+    totalsByStatus,
+    filters: { status, date_from: dateFrom, date_to: dateTo },
   });
 });
+
+app.get("/afiliados/referidos", (req, res) => {
+  const userId = resolveAffiliateUserIdForRequest(req);
+  if (!userId) return flashAndRedirect(req, res, "error", "No hay afiliados registrados.", "/admin/affiliates");
+  const affiliate = affiliateProfileByUserId(userId);
+  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/admin/affiliates");
+
+  const q = String(req.query.q || "").trim().toLowerCase();
+  let sql = `
+      SELECT b.*, u.email AS owner_email, u.full_name AS owner_name,
+             p.display_name AS plan_name
+      FROM businesses b
+      JOIN users u ON u.id = b.user_id
+      LEFT JOIN plans p ON p.id = b.plan_id
+      WHERE b.affiliate_id = ?`;
+  const params = [affiliate.id];
+  if (q) {
+    sql += " AND (LOWER(b.business_name) LIKE ? OR LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ?)";
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  sql += " ORDER BY b.referred_at DESC, b.created_at DESC";
+  const referrals = db.prepare(sql).all(...params);
+
+  res.render("affiliate/referrals", {
+    title: "Comercios referidos | Windi Menu",
+    robots: "noindex,nofollow",
+    affiliate,
+    referrals,
+    filters: { q },
+  });
+});
+
+app.get("/afiliados/pagos", (req, res) => {
+  const userId = resolveAffiliateUserIdForRequest(req);
+  if (!userId) return flashAndRedirect(req, res, "error", "No hay afiliados registrados.", "/admin/affiliates");
+  const affiliate = affiliateProfileByUserId(userId);
+  if (!affiliate) return flashAndRedirect(req, res, "error", "Perfil de afiliado no encontrado.", "/admin/affiliates");
+
+  const payouts = db
+    .prepare(
+      `SELECT *
+       FROM affiliate_payouts
+       WHERE affiliate_id = ?
+       ORDER BY created_at DESC`
+    )
+    .all(affiliate.id);
+  const approvedUnpaid = db
+    .prepare(
+      `SELECT COALESCE(SUM(commission_amount),0) AS total
+       FROM affiliate_sales
+       WHERE affiliate_id = ? AND status = 'APPROVED' AND payout_id IS NULL`
+    )
+    .get(affiliate.id).total;
+  const pendingForPayout = Math.max(0, Number(approvedUnpaid) - Number(affiliate.negative_balance || 0));
+
+  res.render("affiliate/payouts", {
+    title: "Pagos afiliado | Windi Menu",
+    robots: "noindex,nofollow",
+    affiliate,
+    payouts,
+    pendingForPayout,
+  });
+});
+
+app.get("/affiliate/dashboard", (_req, res) => res.redirect("/afiliados/panel"));
+app.get("/affiliate/sales", (_req, res) => res.redirect("/afiliados/ventas"));
+app.get("/affiliate/referrals", (_req, res) => res.redirect("/afiliados/referidos"));
 
 app.get("/admin", requireRole("ADMIN"), (_req, res) => {
   res.redirect("/admin/affiliate-sales");
@@ -3155,6 +3425,7 @@ app.get("/:slug", (req, res, next) => {
     "app",
     "admin",
     "affiliate",
+    "afiliados",
     "panel",
     "billing",
     "onboarding",

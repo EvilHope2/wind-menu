@@ -102,6 +102,31 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
   });
 });
 
+document.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const copyButton = target.closest("[data-copy-text]");
+  if (!copyButton) return;
+  const text = String(copyButton.getAttribute("data-copy-text") || "").trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    const toast = document.createElement("div");
+    toast.className = "toast toast-success";
+    toast.textContent = "Copiado";
+    let stack = document.querySelector(".toast-stack");
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.className = "toast-stack";
+      document.body.appendChild(stack);
+    }
+    stack.appendChild(toast);
+    setTimeout(() => toast.remove(), 1800);
+  } catch (_error) {
+    // no-op
+  }
+});
+
 (function setupPublicMenuCart() {
   const root = document.querySelector("[data-public-menu]");
   if (!root) return;
@@ -148,6 +173,8 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
   const shippingNode = root.querySelector("[data-cart-shipping]");
   const shippingLabel = root.querySelector("[data-shipping-label]");
   const totalNode = root.querySelector("[data-cart-total]");
+  const ctaTotalNode = root.querySelector("[data-cart-cta-total]");
+  const fabTotalNode = root.querySelector("[data-cart-fab-total]");
   const estimatedTimeNode = root.querySelector("[data-estimated-time]");
   const form = root.querySelector("[data-cart-form]");
   const zoneWrap = root.querySelector("[data-zone-wrap]");
@@ -165,14 +192,14 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
   const openCartButtons = root.querySelectorAll("[data-open-cart]");
   const closeCartButtons = root.querySelectorAll("[data-close-cart]");
   const addButtons = root.querySelectorAll(".js-add-cart");
-  const orderTypeField = form.querySelector("select[name='order_type']");
   const zoneField = form.querySelector("select[name='delivery_zone_id']");
   const nameField = form.querySelector("input[name='customer_name']");
   const addressField = form.querySelector("input[name='address']");
   const referenceField = form.querySelector("input[name='reference']");
   const notesField = form.querySelector("textarea[name='notes']");
   const cashChangeField = form.querySelector("input[name='cash_change_amount']");
-  const submitBtn = form.querySelector("button[type='submit']");
+  const stickyHelp = root.querySelector("[data-cart-sticky-help]");
+  const submitBtn = root.querySelector("[data-submit-order]") || form.querySelector("button[type='submit']");
 
   const enabledPayments = [
     paymentMethods.card ? { id: "card", label: "Tarjeta" } : null,
@@ -183,6 +210,7 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
   let cart = loadCart();
   hydrateZoneOptions();
   hydratePaymentOptions();
+  syncOrderTypeWithZones();
 
   function parseJson(source, fallback) {
     try {
@@ -229,14 +257,31 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     paymentError.classList.remove("hidden");
   }
 
+  function showToast(message) {
+    if (!message) return;
+    const toast = document.createElement("div");
+    toast.className = "toast toast-success";
+    toast.textContent = message;
+    let stack = document.querySelector(".toast-stack");
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.className = "toast-stack";
+      document.body.appendChild(stack);
+    }
+    stack.appendChild(toast);
+    setTimeout(() => toast.remove(), 1800);
+  }
+
   function openCart() {
     drawer.classList.add("open");
     drawer.setAttribute("aria-hidden", "false");
+    document.body.classList.add("cart-open");
   }
 
   function closeCart() {
     drawer.classList.remove("open");
     drawer.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("cart-open");
   }
 
   function escapeHtml(value) {
@@ -248,8 +293,13 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
       .replace(/'/g, "&#039;");
   }
 
+  function selectedOrderType() {
+    const selected = form.querySelector("input[name='order_type']:checked");
+    return selected ? selected.value : "";
+  }
+
   function isDelivery() {
-    return orderTypeField.value === "envio";
+    return selectedOrderType() === "envio";
   }
 
   function selectedPaymentId() {
@@ -331,7 +381,7 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     zoneField.innerHTML = [
       '<option value="">Seleccionar zona</option>',
       ...deliveryZones.map((zone) => {
-        const label = `${escapeHtml(zone.name)} (${money.format(Number(zone.price || 0))})`;
+        const label = `${escapeHtml(zone.name)} - ${money.format(Number(zone.price || 0))}`;
         return `<option value="${zone.id}">${label}</option>`;
       }),
     ].join("");
@@ -353,7 +403,7 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     paymentOptions.innerHTML = enabledPayments
       .map(
         (method, index) => `
-          <label class="pay-option">
+          <label class="pay-option pay-card">
             <input type="radio" name="payment_method" value="${method.id}" ${index === 0 ? "checked" : ""} required />
             <span>${method.label}</span>
           </label>
@@ -361,6 +411,17 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
       )
       .join("");
     togglePaymentExtras();
+  }
+
+  function syncOrderTypeWithZones() {
+    const deliveryOption = form.querySelector("input[name='order_type'][value='envio']");
+    const pickupOption = form.querySelector("input[name='order_type'][value='retiro']");
+    if (deliveryOption && !deliveryZones.length) {
+      deliveryOption.disabled = true;
+      if (deliveryOption.checked && pickupOption) {
+        pickupOption.checked = true;
+      }
+    }
   }
 
   function toggleDeliveryFields() {
@@ -379,7 +440,15 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
 
     const transferInfo = formatTransferInfo();
     if (showTransfer && transferInfo) {
-      transferBox.innerHTML = `<small>${escapeHtml(transferInfo)}</small>`;
+      const alias = transferConfig.alias
+        ? `<div><span>Alias</span><strong>${escapeHtml(transferConfig.alias)}</strong><button type="button" class="btn btn-ghost" data-copy-text="${escapeHtml(transferConfig.alias)}">Copiar</button></div>`
+        : "";
+      const cvu = transferConfig.cvu
+        ? `<div><span>CVU</span><strong>${escapeHtml(transferConfig.cvu)}</strong><button type="button" class="btn btn-ghost" data-copy-text="${escapeHtml(transferConfig.cvu)}">Copiar</button></div>`
+        : "";
+      const holder = transferConfig.holder ? `<div><span>Titular</span><strong>${escapeHtml(transferConfig.holder)}</strong></div>` : "";
+      const note = transferConfig.note ? `<p>${escapeHtml(transferConfig.note)}</p>` : "";
+      transferBox.innerHTML = `${alias}${cvu}${holder}${note}`;
       transferBox.classList.remove("hidden");
     } else {
       transferBox.classList.add("hidden");
@@ -399,20 +468,26 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
       itemsWrap.innerHTML = cart
         .map((item) => {
           const subtotal = item.price * item.qty;
+          const image = item.image
+            ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" class="cart-item-thumb" />`
+            : '<div class="cart-item-thumb placeholder"><i data-lucide="image"></i></div>';
           return `
             <article class="cart-item">
-              <div class="cart-item-head">
-                <h4>${escapeHtml(item.name)}</h4>
-                <button type="button" class="btn btn-danger" data-remove-item="${item.id}">Eliminar</button>
-              </div>
-              <small>${money.format(item.price)} c/u</small>
-              <div class="cart-item-head">
-                <div class="cart-qty">
-                  <button type="button" data-qty-minus="${item.id}">-</button>
-                  <strong>${item.qty}</strong>
-                  <button type="button" data-qty-plus="${item.id}">+</button>
+              ${image}
+              <div class="cart-item-main">
+                <div class="cart-item-head">
+                  <h4>${escapeHtml(item.name)}</h4>
+                  <button type="button" class="btn btn-danger" aria-label="Eliminar item" data-remove-item="${item.id}">Eliminar</button>
                 </div>
-                <strong>${money.format(subtotal)}</strong>
+                <small>${money.format(item.price)} c/u</small>
+                <div class="cart-item-head">
+                  <div class="cart-qty">
+                    <button type="button" aria-label="Quitar unidad" data-qty-minus="${item.id}">-</button>
+                    <strong>${item.qty}</strong>
+                    <button type="button" aria-label="Agregar unidad" data-qty-plus="${item.id}">+</button>
+                  </div>
+                  <strong>${money.format(subtotal)}</strong>
+                </div>
               </div>
             </article>
           `;
@@ -427,6 +502,8 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
 
     subtotalNode.textContent = money.format(subtotal);
     totalNode.textContent = money.format(total);
+    if (ctaTotalNode) ctaTotalNode.textContent = money.format(total);
+    if (fabTotalNode) fabTotalNode.textContent = money.format(total);
 
     if (isDelivery()) {
       const shippingText = summary.freeApplied
@@ -455,6 +532,14 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
       setError(openStatus.message || "El local esta cerrado por el momento.");
     } else {
       setError("");
+    }
+    if (stickyHelp) {
+      const helperError = validateBeforeSend();
+      submitBtn.disabled = Boolean(helperError);
+      stickyHelp.textContent = helperError || "Listo para enviar tu pedido.";
+    }
+    if (window.lucide && typeof window.lucide.createIcons === "function") {
+      window.lucide.createIcons();
     }
   }
 
@@ -581,11 +666,17 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     if (existing) {
       existing.qty += 1;
     } else {
-      cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
+      cart.push({ id: product.id, name: product.name, price: product.price, qty: 1, image: product.image || "" });
     }
     saveCart();
     render();
     openCart();
+    showToast("Agregado al carrito");
+    const floatButton = root.querySelector(".cart-float");
+    if (floatButton) {
+      floatButton.classList.add("pulse");
+      setTimeout(() => floatButton.classList.remove("pulse"), 320);
+    }
   }
 
   function changeQty(id, delta) {
@@ -610,6 +701,7 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
         name: button.dataset.productName || "Producto",
         price: Number(button.dataset.productPrice || 0),
         soldOut: button.dataset.productSoldout === "1",
+        image: button.dataset.productImage || "",
       });
     });
   });
@@ -673,9 +765,20 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     closeCart();
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && drawer.classList.contains("open")) {
+      closeCart();
+    }
+  });
+
   if (!openStatus.canOrder) {
     submitBtn.disabled = true;
   }
+  closeCartButtons.forEach((button) =>
+    button.addEventListener("click", () => {
+      restoreFormSubmitButtons();
+    })
+  );
   toggleDeliveryFields();
   togglePaymentExtras();
   render();

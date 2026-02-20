@@ -1,4 +1,4 @@
-<%- include("../partials/head", { title }) %>
+<%- include("../partials/head", { title, robots }) %>
 <main class="landing">
   <%- include("../partials/affiliate-nav") %>
   <section class="how">
@@ -49,6 +49,31 @@
                 <td>$<%= Number(p.amount_paid || 0).toLocaleString("es-AR") %></td>
                 <td><%= p.method || '-' %></td>
                 <td><%= p.created_at %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="top-actions" style="justify-content:space-between">
+        <h2>Ultimas ventas</h2>
+        <a class="btn btn-ghost" href="/afiliados/ventas">Ver todas las ventas</a>
+      </div>
+      <% if (!lastSales.length) { %><div class="empty">Todavia no hay ventas registradas.</div><% } %>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Comercio</th><th>Plan</th><th>Monto</th><th>Comision</th><th>Estado</th></tr></thead>
+          <tbody>
+            <% lastSales.forEach((s) => { %>
+              <tr>
+                <td><%= s.created_at %></td>
+                <td><%= s.business_name || '-' %></td>
+                <td><%= s.plan_name || '-' %></td>
+                <td>$<%= Number(s.amount || 0).toLocaleString("es-AR") %></td>
+                <td>$<%= Number(s.commission_amount || 0).toLocaleString("es-AR") %></td>
+                <td><span class="tag"><%= s.status %></span></td>
               </tr>
             <% }) %>
           </tbody>
