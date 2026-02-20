@@ -457,6 +457,41 @@ function ensureAdminAccount({ email, password, fullName }) {
   return true;
 }
 
+function ensureCommerceAccount({ email, password, fullName, whatsapp }) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const rawPassword = String(password || "").trim();
+  if (!cleanEmail || !rawPassword) return false;
+
+  const existing = db.prepare("SELECT * FROM users WHERE email = ?").get(cleanEmail);
+  const passwordHash = bcrypt.hashSync(rawPassword, 10);
+  if (existing) {
+    db.prepare(
+      `UPDATE users
+       SET full_name = COALESCE(NULLIF(?, ''), full_name),
+           role = 'COMMERCE',
+           whatsapp = COALESCE(NULLIF(?, ''), whatsapp),
+           password_hash = ?
+       WHERE id = ?`
+    ).run(String(fullName || "").trim(), String(whatsapp || "").trim(), passwordHash, existing.id);
+    ensureBusinessForUser(existing.id);
+    return true;
+  }
+
+  const result = db
+    .prepare(
+      `INSERT INTO users (full_name, email, whatsapp, role, password_hash, created_at)
+       VALUES (?, ?, ?, 'COMMERCE', ?, CURRENT_TIMESTAMP)`
+    )
+    .run(
+      String(fullName || "Comercio Demo").trim() || "Comercio Demo",
+      cleanEmail,
+      String(whatsapp || "5491100000000").trim() || "5491100000000",
+      passwordHash
+    );
+  ensureBusinessForUser(result.lastInsertRowid);
+  return true;
+}
+
 function ensureRuntimeAdminAccounts() {
   let changed = false;
   changed = ensureAdminAccount({
@@ -468,6 +503,17 @@ function ensureRuntimeAdminAccounts() {
     email: "admin@windi.menu",
     password: "admin1234",
     fullName: "Admin Windi",
+  }) || changed;
+  return changed;
+}
+
+function ensureRuntimeCommerceAccounts() {
+  let changed = false;
+  changed = ensureCommerceAccount({
+    email: process.env.DEMO_COMMERCE_EMAIL || "p4@gmail.com",
+    password: process.env.DEMO_COMMERCE_PASSWORD || "123456",
+    fullName: process.env.DEMO_COMMERCE_NAME || "Comercio Prueba",
+    whatsapp: process.env.DEMO_COMMERCE_WHATSAPP || "5491100000000",
   }) || changed;
   return changed;
 }
@@ -3675,6 +3721,7 @@ async function bootstrap() {
 
   bootstrapPromise = (async () => {
     let adminChanged = false;
+    let commerceChanged = false;
     if (RUNTIME_SYNC && HAS_SUPABASE_DB) {
       try {
         await applySupabaseSchema();
@@ -3686,7 +3733,8 @@ async function bootstrap() {
           await pushMirrorNow();
         }
         adminChanged = ensureRuntimeAdminAccounts();
-        if (adminChanged) {
+        commerceChanged = ensureRuntimeCommerceAccounts();
+        if (adminChanged || commerceChanged) {
           await pushMirrorNow();
         }
       } catch (error) {
@@ -3697,13 +3745,15 @@ async function bootstrap() {
         const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
         if (!localUsers) createSeedData();
         adminChanged = ensureRuntimeAdminAccounts();
+        commerceChanged = ensureRuntimeCommerceAccounts();
       }
     } else {
       const localUsers = db.prepare("SELECT COUNT(*) AS total FROM users").get().total;
       if (!localUsers) createSeedData();
       adminChanged = ensureRuntimeAdminAccounts();
+      commerceChanged = ensureRuntimeCommerceAccounts();
     }
-    if (!RUNTIME_SYNC && adminChanged) {
+    if (!RUNTIME_SYNC && (adminChanged || commerceChanged)) {
       // nothing else needed for local mode
     }
   })();
