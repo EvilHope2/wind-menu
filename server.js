@@ -417,7 +417,20 @@ function ensureCommerceAccount({ email, password, fullName, whatsapp }) {
            password_hash = ?
        WHERE id = ?`
     ).run(String(fullName || "").trim(), String(whatsapp || "").trim(), passwordHash, existing.id);
-    ensureBusinessForUser(existing.id);
+    const business = ensureBusinessForUser(existing.id);
+    const basicPlan = db
+      .prepare("SELECT id FROM plans WHERE UPPER(COALESCE(code,'')) = 'BASIC' ORDER BY id ASC LIMIT 1")
+      .get();
+    if (business) {
+      db.prepare(
+        `UPDATE businesses
+         SET has_completed_onboarding = 1,
+             onboarding_step = 'done',
+             plan_id = COALESCE(?, plan_id),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      ).run(basicPlan?.id || null, business.id);
+    }
     return true;
   }
 
@@ -432,7 +445,20 @@ function ensureCommerceAccount({ email, password, fullName, whatsapp }) {
       String(whatsapp || "5491100000000").trim() || "5491100000000",
       passwordHash
     );
-  ensureBusinessForUser(result.lastInsertRowid);
+  const business = ensureBusinessForUser(result.lastInsertRowid);
+  const basicPlan = db
+    .prepare("SELECT id FROM plans WHERE UPPER(COALESCE(code,'')) = 'BASIC' ORDER BY id ASC LIMIT 1")
+    .get();
+  if (business) {
+    db.prepare(
+      `UPDATE businesses
+       SET has_completed_onboarding = 1,
+           onboarding_step = 'done',
+           plan_id = COALESCE(?, plan_id),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(basicPlan?.id || null, business.id);
+  }
   return true;
 }
 
