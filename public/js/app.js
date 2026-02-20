@@ -317,7 +317,10 @@ document.addEventListener("click", async (event) => {
   function toAmount(value) {
     if (value === null || value === undefined || value === "") return 0;
     if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-    const normalized = String(value).replace(/\./g, "").replace(",", ".");
+    const normalized = String(value)
+      .replace(/[^\d,.-]/g, "")
+      .replace(/\.(?=\d{3}(\D|$))/g, "")
+      .replace(",", ".");
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
   }
@@ -338,7 +341,14 @@ document.addEventListener("click", async (event) => {
   }
 
   function effectiveFreeOver(zone) {
-    if (zone && toAmount(zone.free_delivery_over_amount) > 0) return toAmount(zone.free_delivery_over_amount);
+    const hasZoneRule =
+      zone &&
+      zone.free_delivery_over_amount !== null &&
+      zone.free_delivery_over_amount !== undefined &&
+      String(zone.free_delivery_over_amount).trim() !== "";
+    if (hasZoneRule) {
+      return toAmount(zone.free_delivery_over_amount);
+    }
     return toAmount(generalFreeOver || 0);
   }
 
