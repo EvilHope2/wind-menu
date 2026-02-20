@@ -66,6 +66,10 @@
       signal: controller.signal
     });
     clearTimeout(timeout);
+    if (response.redirected && response.url) {
+      window.location.href = response.url;
+      return;
+    }
     const data = await response.json().catch(() => ({}));
     if (data.redirect_to) {
       window.location.href = data.redirect_to;
@@ -91,9 +95,11 @@
       button.textContent = "Preparando checkout...";
       try {
         await selectPlan(button.dataset.planCode, button.dataset.planId);
-      } catch (_error) {
+      } catch (error) {
         if (planError) {
-          planError.textContent = "No pudimos iniciar el checkout. Reintenta en unos segundos.";
+          planError.textContent = String(error && error.name) === "AbortError"
+            ? "Mercado Pago esta demorando. Reintenta en unos segundos."
+            : "No pudimos iniciar el checkout. Reintenta en unos segundos.";
         }
       } finally {
         button.disabled = false;

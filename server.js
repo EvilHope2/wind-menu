@@ -1817,18 +1817,21 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
     }
 
     const externalReference = `sub:${seedSubscription.id}|biz:${business.id}|plan:${planCode}`;
-    const preference = await createMercadoPagoPreference({
-      subscription: {
-        id: seedSubscription.id,
-        amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
-        external_reference: externalReference,
-      },
-      plan,
-      business,
-      user,
-      returnBasePath: "/onboarding/checkout",
-      planCode,
-    });
+    const preference = await withTimeout(
+      createMercadoPagoPreference({
+        subscription: {
+          id: seedSubscription.id,
+          amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
+          external_reference: externalReference,
+        },
+        plan,
+        business,
+        user,
+        returnBasePath: "/onboarding/checkout",
+        planCode,
+      }),
+      12000
+    );
 
     const checkoutUrl = preference.init_point || preference.sandbox_init_point;
     if (!checkoutUrl) {
@@ -1845,6 +1848,12 @@ app.post("/api/onboarding/select-plan", requireRole("COMMERCE"), async (req, res
     return res.json({ ok: true, checkout_url: checkoutUrl, subscription_id: updated.subscriptionId });
   } catch (error) {
     console.error("Select plan/onboarding fallo:", error.message);
+    if (String(error.message || "").toLowerCase().includes("timeout")) {
+      return res.status(504).json({
+        ok: false,
+        message: "Mercado Pago tardo demasiado en responder. Reintenta en unos segundos.",
+      });
+    }
     return res.status(500).json({ ok: false, message: "No se pudo iniciar el checkout." });
   }
 });
@@ -2148,18 +2157,21 @@ app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
       checkoutUrl: null,
       preferenceId: null,
     });
-    const preference = await createMercadoPagoPreference({
-      subscription: {
-        id: draft.subscriptionId,
-        amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
-        external_reference: draft.externalReference,
-      },
-      plan,
-      business,
-      user,
-      returnBasePath: "/app/plans",
-      planCode: plan.code,
-    });
+    const preference = await withTimeout(
+      createMercadoPagoPreference({
+        subscription: {
+          id: draft.subscriptionId,
+          amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
+          external_reference: draft.externalReference,
+        },
+        plan,
+        business,
+        user,
+        returnBasePath: "/app/plans",
+        planCode: plan.code,
+      }),
+      12000
+    );
 
     const checkoutUrl = preference.init_point || preference.sandbox_init_point;
     if (!checkoutUrl) {
@@ -2175,6 +2187,15 @@ app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
     return res.redirect(checkoutUrl);
   } catch (error) {
     console.error("Error creando checkout Mercado Pago:", error.message);
+    if (String(error.message || "").toLowerCase().includes("timeout")) {
+      return flashAndRedirect(
+        req,
+        res,
+        "error",
+        "Mercado Pago esta demorando. Reintenta en unos segundos.",
+        "/app/plans"
+      );
+    }
     return flashAndRedirect(req, res, "error", "No se pudo iniciar el pago. Intenta nuevamente.", "/app/plans");
   }
 });
