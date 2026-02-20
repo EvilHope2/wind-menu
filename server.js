@@ -1428,10 +1428,18 @@ app.post("/app/plans/:id/checkout", requireAuth, async (req, res) => {
   }
 
   try {
-    const draft = pendingSubscriptionForBusiness(business.id) || { id: Date.now(), amount: normalizeMoneyValue(plan.price_ars ?? plan.price) };
-    const externalReference = `sub:${draft.id}|biz:${business.id}|plan:${String(plan.code || "").toUpperCase()}`;
+    const draft = createOrUpdatePendingSubscriptionAndPayment({
+      business,
+      plan,
+      checkoutUrl: null,
+      preferenceId: null,
+    });
     const preference = await createMercadoPagoPreference({
-      subscription: { id: draft.id, amount: normalizeMoneyValue(plan.price_ars ?? plan.price), external_reference: externalReference },
+      subscription: {
+        id: draft.subscriptionId,
+        amount: normalizeMoneyValue(plan.price_ars ?? plan.price),
+        external_reference: draft.externalReference,
+      },
       plan,
       business,
       user,
