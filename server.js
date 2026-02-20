@@ -299,47 +299,82 @@ function currentLegalVersions() {
   };
 }
 
+function ensureLegalConsentsTable() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS legal_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      terms_version TEXT NOT NULL,
+      privacy_version TEXT NOT NULL,
+      accepted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ip_address TEXT,
+      user_agent TEXT,
+      source TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_legal_consents_user_id ON legal_consents(user_id);
+  `);
+}
+
 function hasLatestLegalConsent(userId, role) {
+  ensureLegalConsentsTable();
   const versions = currentLegalVersions();
-  const row = db
-    .prepare(
-      `SELECT id
-       FROM legal_consents
-       WHERE user_id = ? AND role = ? AND terms_version = ? AND privacy_version = ?
-       ORDER BY accepted_at DESC, id DESC
-       LIMIT 1`
-    )
-    .get(userId, role, versions.terms, versions.privacy);
-  return Boolean(row);
+  try {
+    const row = db
+      .prepare(
+        `SELECT id
+         FROM legal_consents
+         WHERE user_id = ? AND role = ? AND terms_version = ? AND privacy_version = ?
+         ORDER BY accepted_at DESC, id DESC
+         LIMIT 1`
+      )
+      .get(userId, role, versions.terms, versions.privacy);
+    return Boolean(row);
+  } catch (error) {
+    console.error("hasLatestLegalConsent fallo:", error.message);
+    return false;
+  }
 }
 
 function latestLegalConsentByUser(userId) {
-  return db
-    .prepare(
-      `SELECT *
-       FROM legal_consents
-       WHERE user_id = ?
-       ORDER BY accepted_at DESC, id DESC
-       LIMIT 1`
-    )
-    .get(userId);
+  ensureLegalConsentsTable();
+  try {
+    return db
+      .prepare(
+        `SELECT *
+         FROM legal_consents
+         WHERE user_id = ?
+         ORDER BY accepted_at DESC, id DESC
+         LIMIT 1`
+      )
+      .get(userId);
+  } catch (error) {
+    console.error("latestLegalConsentByUser fallo:", error.message);
+    return null;
+  }
 }
 
 function recordLegalConsent(req, { userId, role, source }) {
+  ensureLegalConsentsTable();
   const versions = currentLegalVersions();
-  db.prepare(
-    `INSERT INTO legal_consents
-     (user_id, role, terms_version, privacy_version, accepted_at, ip_address, user_agent, source, created_at)
-     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)`
-  ).run(
-    userId,
-    role,
-    versions.terms,
-    versions.privacy,
-    String(req.ip || "").trim() || null,
-    String(req.headers["user-agent"] || "").slice(0, 255) || null,
-    source || null
-  );
+  try {
+    db.prepare(
+      `INSERT INTO legal_consents
+       (user_id, role, terms_version, privacy_version, accepted_at, ip_address, user_agent, source, created_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).run(
+      userId,
+      role,
+      versions.terms,
+      versions.privacy,
+      String(req.ip || "").trim() || null,
+      String(req.headers["user-agent"] || "").slice(0, 255) || null,
+      source || null
+    );
+  } catch (error) {
+    console.error("recordLegalConsent fallo:", error.message);
+  }
 }
 
 function getBusinessByUserId(userId) {
@@ -1674,14 +1709,21 @@ app.get("/legal/aceptar", requireAuth, (req, res) => {
 
 app.get("/settings/legal", requireAuth, (req, res) => {
   const role = req.session.user.role || "COMMERCE";
-  const consents = db
-    .prepare(
-      `SELECT accepted_at, role, terms_version, privacy_version, source
-       FROM legal_consents
-       WHERE user_id = ?
-       ORDER BY accepted_at DESC, id DESC`
-    )
-    .all(req.session.user.id);
+  ensureLegalConsentsTable();
+  let consents = [];
+  try {
+    consents = db
+      .prepare(
+        `SELECT accepted_at, role, terms_version, privacy_version, source
+         FROM legal_consents
+         WHERE user_id = ?
+         ORDER BY accepted_at DESC, id DESC`
+      )
+      .all(req.session.user.id);
+  } catch (error) {
+    console.error("settings/legal fallo:", error.message);
+    consents = [];
+  }
 
   res.render("settings/legal", {
     title: "Consentimiento legal | Windi Menu",
